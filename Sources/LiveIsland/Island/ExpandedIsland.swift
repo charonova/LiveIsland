@@ -642,3 +642,333 @@ private struct EmptyMedia: View {
         .frame(maxHeight: .infinity)
     }
 }
+
+// MARK: - Agents
+
+private struct AgentsPage: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                SessionsHeader()
+                if model.sessions.isEmpty {
+                    VStack(spacing: 8) {
+                        HStack(spacing: -6) {
+                            AgentAvatar(kind: .claude, state: .idle, size: 34)
+                            AgentAvatar(kind: .codex, state: .idle, size: 34)
+                        }
+                        Text("No agents running").font(.system(size: 13, weight: .semibold))
+                        Text("Claude Code and Codex sessions show up here as they work.")
+                            .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(model.sessions.prefix(8)) { session in
+                                AgentRow(session: session)
+                            }
+                        }
+                    }
+                    .scrollIndicators(.never)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            UsagePanel().frame(width: 214)
+        }
+    }
+}
+
+private struct SessionsHeader: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        let working = model.sessions.filter { $0.state == .working }.count
+        let waiting = model.sessions.filter { $0.state == .waiting }.count
+        HStack(spacing: 6) {
+            Text("Sessions").font(.system(size: 12, weight: .bold))
+            if working > 0 { Chip(text: "\(working) working", color: AgentGlyph(kind: .claude).color) }
+            if waiting > 0 { Chip(text: "\(waiting) need\(waiting == 1 ? "s" : "") you", color: .yellow) }
+            Spacer()
+        }
+    }
+}
+
+private struct Chip: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .frame(height: 18)
+            .background(Capsule().fill(color.opacity(0.16)))
+    }
+}
+
+/// The agent's mark in a tinted square, ringed by a spinner while it works.
+struct AgentAvatar: View {
+    let kind: AgentKind
+    let state: AgentState
+    var size: CGFloat = 30
+
+    var body: some View {
+        let color = AgentGlyph(kind: kind).color
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                .fill(LinearGradient(colors: [color.opacity(0.35), color.opacity(0.12)], startPoint: .top, endPoint: .bottom))
+                .overlay(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous).strokeBorder(color.opacity(0.35), lineWidth: 0.5))
+            Image(systemName: kind == .claude ? "sparkle" : "terminal.fill")
+                .font(.system(size: size * 0.45, weight: .bold))
+                .foregroundStyle(color)
+        }
+        .frame(width: size, height: size)
+        .overlay(alignment: .bottomTrailing) {
+            if state == .working {
+                ProgressView().controlSize(.mini).tint(color)
+                    .padding(1)
+                    .background(Circle().fill(.black))
+                    .offset(x: 4, y: 4)
+            } else if state == .waiting {
+                Circle().fill(.yellow).frame(width: 9, height: 9).overlay(Circle().stroke(.black, lineWidth: 2)).offset(x: 2, y: 2)
+            } else if state == .done {
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(.green)
+                    .background(Circle().fill(.black)).offset(x: 3, y: 3)
+            }
+        }
+    }
+}
+
+private struct AgentRow: View {
+    @EnvironmentObject private var model: IslandModel
+    let session: AgentSession
+
+    var body: some View {
+        HStack(spacing: 10) {
+            AgentAvatar(kind: session.kind, state: session.state)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(session.project).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                Text(session.title ?? session.kind.displayName)
+                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            StateChip(session: session)
+            HStack(spacing: 3) {
+                if session.resumeCommand != nil {
+                    rowButton(model.copiedSession == session.id ? "checkmark" : "doc.on.doc",
+                              help: "Copy the command that resumes this session") { model.copyResumeCommand(session) }
+                }
+                if let host = session.host, let icon = AppInfo.icon(host.bundleIdentifier) {
+                    Button { model.jump(to: session) } label: {
+                        Image(nsImage: icon).resizable().frame(width: 20, height: 20)
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(.white.opacity(0.1)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(PressableStyle())
+                    .help("Go to this session in \(AppInfo.name(host.bundleIdentifier) ?? "its app")")
+                } else {
+                    rowButton("folder", help: "Open the project folder") { model.openSession(session) }
+                }
+            }
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(session.state == .idle ? 0.04 : 0.07)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.07), lineWidth: 0.5))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture { model.jump(to: session) }
+    }
+
+    private func rowButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(.white.opacity(0.08)))
+                .contentShape(Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(PressableStyle())
+        .foregroundStyle(.white.opacity(0.7))
+        .help(help)
+    }
+}
+
+private struct StateChip: View {
+    let session: AgentSession
+
+    var body: some View {
+        Group {
+            switch session.state {
+            case .working:
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Chip(text: Format.span(context.date.timeIntervalSince(session.workingSince ?? session.lastActivity)),
+                         color: AgentGlyph(kind: session.kind).color)
+                }
+            case .waiting:
+                Chip(text: "Needs you", color: .yellow)
+            case .done:
+                Chip(text: "Done", color: .green)
+            case .idle:
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    Text(Format.span(context.date.timeIntervalSince(session.lastActivity)) + " ago")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
+        }
+        .monospacedDigit()
+    }
+}
+
+/// Limits as rings: Claude Code on top, Codex below.
+private struct UsagePanel: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if model.showClaude { ClaudeUsage() }
+            if model.showClaude && model.showCodex { Divider().overlay(.white.opacity(0.08)) }
+            if model.showCodex { CodexUsage() }
+        }
+        .padding(12)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
+    }
+}
+
+private struct ProviderTitle: View {
+    let kind: AgentKind
+    let detail: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            AgentGlyph(kind: kind, size: 9)
+                .frame(width: 14, height: 14)
+            Text(kind.displayName).font(.system(size: 11, weight: .bold))
+            Spacer(minLength: 0)
+            if let detail { Text(detail).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.45)).lineLimit(1) }
+        }
+    }
+}
+
+private struct ClaudeUsage: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        let usage = model.agents.usage
+        VStack(alignment: .leading, spacing: 8) {
+            ProviderTitle(kind: .claude, detail: usage.map { "Today \(Format.tokens($0.todayTokens))" })
+            if let limits = model.agents.claudeLimits {
+                HStack(spacing: 0) {
+                    ForEach(limits.windows, id: \.windowMinutes) { window in
+                        RingGauge(window: window, tint: AgentGlyph(kind: .claude).color).frame(maxWidth: .infinity)
+                    }
+                }
+            } else if let limit = model.agents.claudeLimit {
+                HStack(spacing: 10) {
+                    Ring(fraction: 1, color: .red, size: 40) { Image(systemName: "hand.raised.fill").font(.system(size: 13)).foregroundStyle(.red) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(limit.windowLabel) limit reached").font(.system(size: 11, weight: .semibold)).foregroundStyle(.red)
+                        Text("Resets \(Format.until(limit.resetsAt))").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+            } else if let usage {
+                HStack(spacing: 10) {
+                    let fraction = usage.windowStart.map { min(1, Date().timeIntervalSince($0) / (5 * 3600)) } ?? 0
+                    Ring(fraction: fraction, color: AgentGlyph(kind: .claude).color, size: 40) {
+                        Text(Format.tokens(usage.windowTokens)).font(.system(size: 9, weight: .bold, design: .rounded)).minimumScaleFactor(0.6)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(usage.windowStart == nil ? "No use in 5 hours" : "Tokens this window").font(.system(size: 11, weight: .semibold))
+                        Text(usage.windowEnd.map { "Window ends \(Format.until($0))" } ?? "\(usage.todayRequests) replies today")
+                            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+                        Button { model.openSettings(.agents) } label: {
+                            Text("Show limits in %").font(.system(size: 10, weight: .semibold)).foregroundStyle(AgentGlyph(kind: .claude).color)
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Counting…").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+                }
+            }
+        }
+    }
+}
+
+private struct CodexUsage: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ProviderTitle(kind: .codex, detail: nil)
+            if let limits = model.agents.codexLimits, !limits.windows.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(limits.windows, id: \.windowMinutes) { window in
+                        RingGauge(window: window, tint: AgentGlyph(kind: .codex).color).frame(maxWidth: .infinity)
+                    }
+                }
+            } else {
+                Text("No recent sessions").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+            }
+        }
+    }
+}
+
+private struct RingGauge: View {
+    let window: RateLimitWindow
+    let tint: Color
+
+    var body: some View {
+        let used = min(max(window.usedPercent, 0), 100)
+        HStack(spacing: 7) {
+            Ring(fraction: used / 100, color: color(used), size: 36) {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text("\(Int(used.rounded()))").font(.system(size: 11, weight: .bold, design: .rounded)).monospacedDigit()
+                    Text("%").font(.system(size: 7, weight: .bold, design: .rounded))
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(window.windowMinutes == 300 ? "5 hours" : window.label).font(.system(size: 10, weight: .semibold))
+                Text(window.resetsAt.map { Format.until($0) } ?? "Fresh").font(.system(size: 9)).foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func color(_ used: Double) -> Color {
+        used >= 90 ? .red : used >= 70 ? .orange : tint
+    }
+}
+
+struct Ring<Label: View>: View {
+    let fraction: Double
+    let color: Color
+    var size: CGFloat = 40
+    var lineWidth: CGFloat = 4.5
+    @ViewBuilder var label: Label
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(color.opacity(0.18), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: CGFloat(min(max(fraction, 0), 1)))
+                .stroke(AngularGradient(colors: [color.opacity(0.6), color], center: .center, startAngle: .degrees(0),
+                                        endAngle: .degrees(360 * max(fraction, 0.01))),
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .shadow(color: color.opacity(0.5), radius: 3)
+            label
+        }
+        .frame(width: size, height: size)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: fraction)
+    }
+}
