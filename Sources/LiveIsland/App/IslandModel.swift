@@ -300,6 +300,30 @@ final class IslandModel: ObservableObject {
             }
         }
         agents = next
+        accountsMonitor.observe(limits: next.claudeLimits, notice: next.claudeLimit, latestRequestAt: next.latestRequestAt)
+    }
+
+    // MARK: - Claude accounts
+
+    var accounts: [ClaudeAccount] { accountsState.accounts }
+
+    /// The account in use, when it ran out: by the status line's numbers, or by the notice
+    /// Claude Code logged when a request was refused.
+    var exhaustedAccount: ClaudeAccount? {
+        guard let active = accountsState.active else { return nil }
+        if active.current(at: clock).isAtLimit || agents.claudeLimit != nil { return active }
+        return nil
+    }
+
+    /// Where to go next: the account with the most room that can be switched to.
+    var bestAccount: ClaudeAccount? { ClaudeAccount.best(accounts, at: clock) }
+
+    func switchAccount(_ account: ClaudeAccount) {
+        accountsMonitor.switchTo(account)
+    }
+
+    func forgetAccount(_ account: ClaudeAccount) {
+        accountsMonitor.forget(account)
     }
 
     func installStatusLine() {
@@ -354,6 +378,9 @@ final class IslandModel: ObservableObject {
                 }
             }
         }
+        if showAgents, let exhausted = exhaustedAccount, let best = bestAccount {
+            list.append(.accountLimit(account: exhausted.identity.displayName, switchTo: best.identity.displayName))
+        }
         if let transient { list.append(transient) }
         if showCalendar, let event = upcomingEvent(at: now) { list.append(.eventSoon(title: event.title, startsAt: event.start)) }
         if showCalls {
@@ -407,6 +434,7 @@ final class IslandModel: ObservableObject {
         guard !isExpanded else { return }
         tab = suggestedTab
         isExpanded = true
+        accountsMonitor.isVisible = tab == .accounts
         if timerFinished { dismissTimerAlert() }
         // Spotify and Music don't say when someone seeks inside them; check while open.
         if controlPlayers {
@@ -422,6 +450,7 @@ final class IslandModel: ObservableObject {
 
     func collapse() {
         isExpanded = false
+        accountsMonitor.isVisible = false
         hoveredSession = nil
         scrubbing = nil
         selectedPlayerID = nil
@@ -433,6 +462,7 @@ final class IslandModel: ObservableObject {
     private var suggestedTab: IslandTab {
         switch primary {
         case .agentNeedsYou, .agentDone, .agentWorking: return .agents
+        case .accountLimit: return .accounts
         case .nowPlaying: return .media
         case .call, .timer, .timerFinished, .headphonesConnected, .charging, .eventSoon, .cameraOn, .microphoneOn: return .activity
         case nil: return nowPlaying != nil ? .media : (sessions.isEmpty ? .activity : .agents)
