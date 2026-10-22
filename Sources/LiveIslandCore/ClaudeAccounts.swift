@@ -346,3 +346,69 @@ public struct AccountBook: Codable, Equatable, Sendable {
         entries[key] = nil
     }
 }
+
+/// An account as the island shows it, whatever it came from.
+public struct ClaudeAccount: Identifiable, Equatable, Sendable {
+    public enum Switcher: String, Codable, Sendable {
+        case liveIsland
+        case claudeSwap
+    }
+
+    public var identity: ClaudeAccountIdentity
+    public var isActive: Bool
+    public var fiveHour: RateLimitWindow?
+    public var sevenDay: RateLimitWindow?
+    public var limitsObservedAt: Date?
+    /// How to switch to it; nil when it can't be switched to from here.
+    public var switcher: Switcher?
+    /// Its saved login expired: sign in to it again with /login.
+    public var needsLogin: Bool
+    public var claudeSwapNumber: Int?
+
+    public var id: String { identity.key }
+
+    public init(identity: ClaudeAccountIdentity, isActive: Bool = false, fiveHour: RateLimitWindow? = nil,
+                sevenDay: RateLimitWindow? = nil, limitsObservedAt: Date? = nil, switcher: Switcher? = nil,
+                needsLogin: Bool = false, claudeSwapNumber: Int? = nil) {
+        self.identity = identity
+        self.isActive = isActive
+        self.fiveHour = fiveHour
+        self.sevenDay = sevenDay
+        self.limitsObservedAt = limitsObservedAt
+        self.switcher = switcher
+        self.needsLogin = needsLogin
+        self.claudeSwapNumber = claudeSwapNumber
+    }
+
+    /// Windows that reset since they were seen count from zero again.
+    public func current(at now: Date) -> ClaudeAccount {
+        var account = self
+        let limits = ClaudeUsageLimits(fiveHour: fiveHour, sevenDay: sevenDay, observedAt: limitsObservedAt ?? now).current(at: now)
+        account.fiveHour = limits.fiveHour
+        account.sevenDay = limits.sevenDay
+        return account
+    }
+
+    /// The fuller of the two windows: what decides whether it can take more work.
+    public var used: Double? {
+        let values = [fiveHour?.usedPercent, sevenDay?.usedPercent].compactMap { $0 }
+        return values.max()
+    }
+
+    public var isAtLimit: Bool { (used ?? 0) >= 100 }
+
+    /// The window that ran out first, for "5-hour limit reached".
+    public var exhaustedWindow: RateLimitWindow? {
+        [fiveHour, sevenDay].compactMap { $0 }.first { $0.usedPercent >= 100 }
+    }
+
+    /// The account to move to next: one that can be switched to, with the most room left.
+    /// Accounts never measured come last.
+    public static func best(_ accounts: [ClaudeAccount], at now: Date) -> ClaudeAccount? {
+        accounts
+            .filter { !$0.isActive && $0.switcher != nil && !$0.needsLogin }
+            .map { $0.current(at: now) }
+            .filter { !$0.isAtLimit }
+            .min { ($0.used ?? 99.5) < ($1.used ?? 99.5) }
+    }
+}
