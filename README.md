@@ -91,6 +91,39 @@ Claude Code shares its 5-hour and weekly percentages only with its status line. 
 
 Prefer to do it yourself? The lines are in [`scripts/claude-statusline-snippet.sh`](scripts/claude-statusline-snippet.sh). They go inside the status line script; typed into a terminal they do nothing. Without them, the island still shows Claude Code's tokens for the current 5-hour window and for today, counted from its transcripts.
 
+## Claude accounts
+
+<div align="center">
+<a href="demo/accounts.mp4"><img src="demo/accounts.gif" width="720" alt="The Accounts tab: three Claude accounts with their 5-hour and weekly limits, switching from one to another"></a>
+</div>
+
+<table>
+  <tr>
+    <td align="center" width="62%">
+      <img src="demo/island-accounts.jpg" alt="Accounts tab: each account with its plan, 5-hour and weekly bars, reset times, and Switch buttons; the one with the most room is starred"><br>
+      <sub><b>Accounts</b><br>Every account's limits; ★ marks the one with the most room</sub>
+    </td>
+    <td align="center" width="38%">
+      <img src="demo/menu-bar-accounts.jpg" alt="Menu bar panel with the account in use, its limits, and a Switch menu listing the other accounts"><br>
+      <sub><b>Menu bar</b><br>Switch without opening the island</sub>
+    </td>
+  </tr>
+</table>
+
+Use more than one Claude account? The **Accounts** tab lists every account Claude Code has used on this Mac, with its plan and its 5-hour and weekly limits. When the account in use runs out, the notch says so and points to the one with the most room. LiveIsland never switches on its own: you tap **Switch**.
+
+Choose how switching works in **Settings › AI Agents**:
+
+| | |
+|---|---|
+| **Off** (default) | Limits and alerts only. You switch with `/login` in Claude Code. |
+| **LiveIsland** | LiveIsland keeps a copy of each account's login in your login Keychain and puts it in place when you tap Switch. Only the Claude login changes: your MCP server logins stay as they are. It holds Claude Code's own locks while it switches, so a login refresh can't collide with it, and running sessions move to the new account within about 30 seconds. |
+| **claude-swap** | LiveIsland asks [claude-swap](https://github.com/realiti4/claude-swap) to switch and shows its live usage for every account. LiveIsland itself never touches a login. |
+
+To add an account, run `/login` in Claude Code and sign in to it (a private browser window helps if you're signed in to claude.ai as someone else). Avoid `/logout`: it can cancel the saved login of the account you leave. Use one switcher at a time, since each keeps its own copy of every login.
+
+LiveIsland learns an account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request. An account you aren't using keeps its last numbers, and a window that has reset counts from zero.
+
 ## How it works
 
 | What | Where it comes from |
