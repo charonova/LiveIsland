@@ -6,6 +6,7 @@ enum IslandTab: String, CaseIterable, Identifiable {
     case media = "Media"
     case agents = "Agents"
     case activity = "Activity"
+    case accounts = "Accounts"
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum IslandTab: String, CaseIterable, Identifiable {
         case .media: return "music.note"
         case .agents: return "sparkles"
         case .activity: return "square.grid.2x2.fill"
+        case .accounts: return "person.2.fill"
         }
     }
 }
@@ -61,7 +63,11 @@ final class IslandModel: ObservableObject {
     // Island state (lives here: SwiftUI's @State needs Xcode's plugins to build)
     @Published private(set) var isExpanded = false
     @Published private(set) var isHovering = false
-    @Published var tab: IslandTab = .media
+    @Published var tab: IslandTab = .media {
+        didSet { accountsMonitor.isVisible = isExpanded && tab == .accounts }
+    }
+    /// Claude accounts and their limits.
+    @Published private(set) var accountsState = AccountsMonitor.Snapshot()
     /// The session row the pointer is over, for its actions.
     @Published var hoveredSession: String?
     /// Where the pointer is dragging the progress bar, 0…1.
