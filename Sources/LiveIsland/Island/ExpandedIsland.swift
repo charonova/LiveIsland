@@ -972,3 +972,267 @@ struct Ring<Label: View>: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: fraction)
     }
 }
+
+// MARK: - Activity
+
+private struct ActivityPage: View {
+    var body: some View {
+        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            GridRow {
+                TimerTile()
+                CalendarTile()
+                BatteryTile()
+            }
+            GridRow {
+                HeadphonesTile()
+                MicrophoneTile()
+                CameraTile()
+            }
+        }
+    }
+}
+
+/// A Settings-style colored square with a white symbol.
+struct IconBadge: View {
+    let symbol: String
+    let tint: Color
+    var size: CGFloat = 20
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+            .fill(LinearGradient(colors: [tint.opacity(0.95), tint.opacity(0.7)], startPoint: .top, endPoint: .bottom))
+            .overlay(Image(systemName: symbol).font(.system(size: size * 0.5, weight: .bold)).foregroundStyle(.white))
+            .frame(width: size, height: size)
+    }
+}
+
+private struct Tile<Accessory: View, Content: View>: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+    @ViewBuilder var accessory: Accessory
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                IconBadge(symbol: symbol, tint: tint)
+                Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                Spacer(minLength: 0)
+                accessory
+            }
+            content
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
+    }
+}
+
+extension Tile where Accessory == EmptyView {
+    init(symbol: String, tint: Color, title: String, @ViewBuilder content: () -> Content) {
+        self.init(symbol: symbol, tint: tint, title: title, accessory: { EmptyView() }, content: content)
+    }
+}
+
+private struct TimerTile: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        Tile(symbol: "timer", tint: .orange, title: "Timer") {
+            if model.timer != nil {
+                HStack(spacing: 4) {
+                    small(model.timer?.isPaused == true ? "play.fill" : "pause.fill") { model.toggleTimerPause() }
+                    small("xmark") { model.cancelTimer() }
+                }
+            }
+        } content: {
+            if let timer = model.timer {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    HStack(spacing: 10) {
+                        Ring(fraction: 1 - timer.progress(at: context.date), color: .orange, size: 42, lineWidth: 4) {
+                            Image(systemName: timer.isPaused ? "pause.fill" : "hourglass").font(.system(size: 12, weight: .bold)).foregroundStyle(.orange)
+                        }
+                        Text(Format.clock(timer.remaining(at: context.date)))
+                            .font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(.orange)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
+            } else if model.timerFinished {
+                Button { model.dismissTimerAlert() } label: {
+                    Label("Time's up", systemImage: "bell.fill").font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(PressableStyle())
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
+                    ForEach([1.0, 5, 10, 25], id: \.self) { minutes in
+                        Button { model.startTimer(minutes: minutes) } label: {
+                            Text("\(Int(minutes)) min").font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .frame(maxWidth: .infinity, minHeight: 24)
+                                .background(Capsule().fill(.orange.opacity(0.16)))
+                                .foregroundStyle(.orange)
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                }
+            }
+        }
+    }
+
+    private func small(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 9, weight: .bold))
+                .frame(width: 20, height: 20).background(Circle().fill(.white.opacity(0.1))).contentShape(Circle())
+        }
+        .buttonStyle(PressableStyle())
+    }
+}
+
+private struct CalendarTile: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        Tile(symbol: "calendar", tint: .red, title: Date().formatted(.dateTime.weekday(.wide).day())) {
+            let upcoming = Array(model.events.prefix(2))
+            if upcoming.isEmpty {
+                Text("No more events").font(.system(size: 13, weight: .semibold))
+                Text("Enjoy the free time").font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(upcoming) { event in
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 1.5).fill(event.color.map(Color.init(cgColor:)) ?? .red).frame(width: 3)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(event.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                                TimelineView(.everyMinute) { context in
+                                    Text(event.start > context.date
+                                         ? "\(event.start.formatted(date: .omitted, time: .shortened)) · \(Format.until(event.start, from: context.date))"
+                                         : "Now · until \(event.end.formatted(date: .omitted, time: .shortened))")
+                                }
+                                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct BatteryTile: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        let battery = model.system.battery
+        Tile(symbol: "bolt.fill", tint: .green, title: "Battery") {
+            if let battery {
+                HStack(alignment: .center, spacing: 10) {
+                    Text("\(battery.percent)%").font(.system(size: 22, weight: .bold, design: .rounded)).monospacedDigit()
+                    BatteryGlyph(percent: battery.percent, charging: battery.isCharging || battery.onPower, width: 34)
+                }
+                Text(detail(battery)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+            } else {
+                Text("Desktop power").font(.system(size: 13, weight: .semibold))
+            }
+        }
+    }
+
+    private func detail(_ battery: SystemMonitor.Battery) -> String {
+        let time = battery.minutesRemaining.map { Format.span(TimeInterval($0 * 60)) }
+        if battery.isCharging { return time.map { "Charging · full in \($0)" } ?? "Charging" }
+        if battery.onPower { return "On power" }
+        return time.map { "\($0) left" } ?? "On battery"
+    }
+}
+
+private struct HeadphonesTile: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        let headphones = model.system.headphones
+        Tile(symbol: headphones.map { HeadphoneSymbol.name(for: $0.name) } ?? "headphones", tint: .blue,
+             title: headphones?.connected == true ? headphones!.name : "Headphones") {
+            if let headphones, headphones.connected {
+                HStack(spacing: 10) {
+                    if let left = headphones.left { level("L", left) }
+                    if let right = headphones.right { level("R", right) }
+                    if let single = headphones.single { level("", single) }
+                    if let caseLevel = headphones.caseLevel { level("Case", caseLevel) }
+                    if headphones.summary == nil && headphones.caseLevel == nil {
+                        Text("Connected").font(.system(size: 13, weight: .semibold))
+                    }
+                }
+            } else {
+                Text("Not connected").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
+                if let output = model.output {
+                    Text("Sound: \(output.device)").font(.system(size: 10)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private func level(_ label: String, _ percent: Int) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("\(percent)%").font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
+                .foregroundStyle(percent <= 20 ? .red : .white)
+            Capsule().fill(.white.opacity(0.15)).frame(width: 30, height: 3)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(percent <= 20 ? Color.red : .green).frame(width: 30 * CGFloat(percent) / 100, height: 3)
+                }
+            if !label.isEmpty { Text(label).font(.system(size: 9, weight: .medium)).foregroundStyle(.white.opacity(0.45)) }
+        }
+    }
+}
+
+private struct MicrophoneTile: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        let call = model.system.call
+        let apps = model.system.microphoneApps
+        Tile(symbol: call != nil ? "phone.fill" : "mic.fill", tint: call != nil ? .green : .orange,
+             title: call != nil ? "Call" : "Microphone") {
+            if let call {
+                Text(call.app).font(.system(size: 14, weight: .bold)).lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(Format.clock(context.date.timeIntervalSince(call.since))).monospacedDigit()
+                }
+                .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(.green)
+            } else if let app = apps.first {
+                HStack(spacing: 6) {
+                    Circle().fill(.orange).frame(width: 7, height: 7)
+                    Text(app).font(.system(size: 14, weight: .bold)).lineLimit(1)
+                }
+                Text(apps.count > 1 ? "+\(apps.count - 1) more listening" : "Listening now")
+                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+            } else {
+                Text("Off").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.8))
+                Text("No app is listening").font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
+            }
+        }
+    }
+}
+
+private struct CameraTile: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        Tile(symbol: "video.fill", tint: model.system.cameraOn ? .green : .gray, title: "Camera") {
+            if model.system.cameraOn {
+                HStack(spacing: 6) {
+                    Circle().fill(.green).frame(width: 7, height: 7)
+                    Text("In use").font(.system(size: 14, weight: .bold))
+                }
+                Text("An app is using the camera").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+            } else {
+                Text("Off").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.8))
+                Text("Nothing is watching").font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
+            }
+        }
+    }
+}
