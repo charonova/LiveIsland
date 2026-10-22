@@ -25,6 +25,7 @@ struct ExpandedIsland: View {
                 case .media: MediaPage().transition(.blurReplace)
                 case .agents: AgentsPage().transition(.blurReplace)
                 case .activity: ActivityPage().transition(.blurReplace)
+                case .accounts: AccountsPage().transition(.blurReplace)
                 }
             }
             .padding(.horizontal, 18)
@@ -165,6 +166,7 @@ private struct AmbientGlow: View {
                 case .media: ArtworkGlow()
                 case .agents: AgentsGlow()
                 case .activity: ActivityGlow()
+                case .accounts: AccountsGlow()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -206,6 +208,21 @@ private struct AgentsGlow: View {
         ])
         .animation(.easeInOut(duration: 0.8), value: waiting)
         .animation(.easeInOut(duration: 0.8), value: working)
+    }
+}
+
+/// Green while the account in use has room, amber once it ran out.
+private struct AccountsGlow: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        let exhausted = model.exhaustedAccount != nil
+        Glows(spots: [
+            ((exhausted ? Color.orange : .green).opacity(0.26), UnitPoint(x: 0.1, y: 0.8), 320),
+            (Color.indigo.opacity(0.26), UnitPoint(x: 0.9, y: 0.9), 300),
+            (AgentGlyph(kind: .claude).color.opacity(0.2), UnitPoint(x: 0.5, y: 0.1), 260),
+        ])
+        .animation(.easeInOut(duration: 0.8), value: exhausted)
     }
 }
 
@@ -695,7 +712,7 @@ private struct SessionsHeader: View {
     }
 }
 
-private struct Chip: View {
+struct Chip: View {
     let text: String
     let color: Color
 
