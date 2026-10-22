@@ -18,6 +18,7 @@ LiveIsland is a macOS app (Swift, SwiftUI + AppKit, no package dependencies) tha
 | `Sources/LiveIsland/Support/` | Process running, login item, artwork colors, Claude Code status line setup |
 | `ThirdParty/mediaremote-adapter/` | Vendored now-playing adapter (BSD-3-Clause, see `UPSTREAM_COMMIT`); keep its license |
 | `Tests/LiveIslandCoreTests/` | Swift Testing suites for `LiveIslandCore`; `RealDataBenchmark` is opt-in |
+| `demo/` | README media (see "Demo media" below) |
 
 ## Build and verify
 
@@ -49,6 +50,21 @@ Every change to `LiveIslandCore` needs tests, with fixtures shaped like real tra
 - **Hardened runtime needs entitlements for privacy prompts** (`Resources/LiveIsland.entitlements`): without `com.apple.security.personal-information.calendars` or `com.apple.security.automation.apple-events`, macOS silently denies instead of asking. Add the entitlement and the `Info.plist` usage string together.
 - **The window never resizes.** The panel is a fixed transparent canvas; the island's shape animates inside it, and clicks pass through everywhere outside the island.
 - No new third-party dependencies.
+
+## Demo media
+
+`demo/` holds the README's GIF, video and screenshots, made from a full-screen recording (`recording.mov`, 4096×2648 on a scaled Retina display). Always drop the audio, and cut anything that shows private content (a terminal with a conversation, files on the desktop). Screen recordings have a variable frame rate, so cut with `trim` + `concat` rather than `select`.
+
+```bash
+ISLAND="crop=1300:640:1398:0"   # the island's region in the recording; adjust for a new one
+ffmpeg -i recording.mov -an -filter_complex "[0:v]trim=4:16,setpts=PTS-STARTPTS[a];[0:v]trim=64:69,setpts=PTS-STARTPTS[b];\
+[a][b]concat=n=2:v=1:a=0,$ISLAND,fps=12,scale=720:-1:flags=lanczos,split[x][y];\
+[x]palettegen=max_colors=192:stats_mode=diff[p];[y][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
+  -loop 0 demo/demo.gif   # keep it under ~10 MB
+ffmpeg -i recording.mov -an -vf "crop=2200:1430:1398:0,fps=30,scale=1100:-2:flags=lanczos" \
+  -c:v libx264 -preset slow -crf 29 -pix_fmt yuv420p -movflags +faststart demo/demo.mp4
+ffmpeg -ss 58.5 -i recording.mov -frames:v 1 -vf "crop=1260:620:1418:0" -q:v 3 demo/island-agents.jpg   # one per page
+```
 
 ## Style
 
