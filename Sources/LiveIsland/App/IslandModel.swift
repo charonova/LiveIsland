@@ -310,9 +310,8 @@ final class IslandModel: ObservableObject {
     /// The account in use, when it ran out: by the status line's numbers, or by the notice
     /// Claude Code logged when a request was refused.
     var exhaustedAccount: ClaudeAccount? {
-        guard let active = accountsState.active else { return nil }
-        if active.current(at: clock).isAtLimit || agents.claudeLimit != nil { return active }
-        return nil
+        guard let active = accountsState.active, active.current(at: clock).isAtLimit else { return nil }
+        return active
     }
 
     /// Where to go next: the account with the most room that can be switched to.
