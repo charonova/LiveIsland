@@ -320,6 +320,7 @@ private struct AgentsSettingsPage: View {
                 ToggleRow(symbol: "speaker.wave.2.fill", tint: .pink, title: "Play a sound",
                           detail: "When an agent finishes, or stops to ask you something", isOn: $model.agentSounds)
             }
+            AccountsSettingsSection()
             Section {
                 if let limits = model.agents.claudeLimits {
                     ForEach(limits.windows, id: \.windowMinutes) { window in
@@ -413,5 +414,87 @@ private struct AboutPage: View {
             .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Claude accounts: how to switch between them, and the ones LiveIsland knows.
+private struct AccountsSettingsSection: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        Section {
+            LabeledContent {
+                Picker("Switch accounts with", selection: $model.accountSwitching) {
+                    ForEach(AccountsMonitor.Switching.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+            } label: {
+                HStack(spacing: 10) {
+                    IconBadge(symbol: "person.2.fill", tint: .indigo, size: 26)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Switch accounts with")
+                        Text("Only when you tap Switch, never on its own").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Text(explanation).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if model.accountSwitching == .claudeSwap && !model.accountsState.claudeSwapInstalled {
+                Label("claude-swap isn't installed. In a terminal: uv tool install claude-swap", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12)).foregroundStyle(.orange).textSelection(.enabled)
+            }
+            ForEach(model.accounts) { account in
+                HStack(spacing: 10) {
+                    AccountAvatar(identity: account.identity, size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(account.identity.displayName)
+                            if account.isActive { Text("In use").font(.system(size: 10, weight: .semibold)).foregroundStyle(.green) }
+                        }
+                        Text([account.identity.email, account.identity.plan].compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(status(account)).font(.system(size: 11)).foregroundStyle(.secondary)
+                    if account.switcher == .liveIsland || !account.isActive {
+                        Button("Forget") { model.forgetAccount(account) }
+                            .help(account.isActive ? "Delete LiveIsland's saved copy of this login" : "Remove this account and LiveIsland's saved login")
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Add an account: run /login in Claude Code and sign in to it. Don't use /logout: it can cancel the saved login of the account you leave.",
+                      systemImage: "person.badge.plus")
+                Label("Running sessions move to the new account within about 30 seconds.", systemImage: "clock")
+                Label("Use one switcher at a time. Each keeps its own copy of every login, and Claude Code replaces a login when it refreshes it, so the other copy goes stale.",
+                      systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+            }
+            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        } header: {
+            Text("Claude accounts")
+        }
+    }
+
+    private var explanation: String {
+        switch model.accountSwitching {
+        case .off:
+            return "LiveIsland shows each account you use and its limits, and tells you when the one in use runs out. Switching stays with you."
+        case .liveIsland:
+            return "LiveIsland keeps each account's Claude login in your login Keychain, and puts it in place when you tap Switch. Your MCP logins stay as they are, and nothing leaves your Mac."
+        case .claudeSwap:
+            return "LiveIsland asks claude-swap to switch and shows its usage for every account. LiveIsland itself never touches a login. Add accounts with `cswap add` after /login."
+        }
+    }
+
+    private func status(_ account: ClaudeAccount) -> String {
+        if account.needsLogin { return "Sign in again" }
+        switch account.switcher {
+        case .liveIsland: return "Login saved"
+        case .claudeSwap: return "In claude-swap"
+        case nil: return model.accountSwitching == .off ? "" : "Not saved yet"
+        }
     }
 }
