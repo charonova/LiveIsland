@@ -31,12 +31,13 @@ struct MenuBarPanel: View {
         VStack(spacing: 12) {
             header
             MiniPlayer()
+            AccountStrip()
             QuickToggles()
             TimerRow()
             footer
         }
         .padding(14)
-        .frame(width: 330, height: 420, alignment: .top)
+        .frame(width: 330, height: 480, alignment: .top)
     }
 
     private var header: some View {
@@ -191,5 +192,49 @@ private struct TimerRow: View {
             }
         }
         .controlSize(.small)
+    }
+}
+
+/// The Claude account in use, its limits, and a menu to switch.
+private struct AccountStrip: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let active = model.accountsState.active {
+                AccountAvatar(identity: active.identity, size: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(active.identity.displayName).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(limits(active)).font(.system(size: 10)).foregroundStyle(active.isAtLimit ? Color.orange : .secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                let others = model.accounts.filter { !$0.isActive && $0.switcher != nil && !$0.needsLogin }
+                if model.accountsState.switching != nil {
+                    ProgressView().controlSize(.small)
+                } else if !others.isEmpty {
+                    Menu("Switch") {
+                        ForEach(others) { account in
+                            Button("\(account.identity.displayName) — \(account.used.map { "\(Int($0.rounded()))% used" } ?? "not seen yet")") {
+                                model.switchAccount(account)
+                            }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+            } else {
+                IconBadge(symbol: "person.2.fill", tint: .indigo, size: 30)
+                Text("Claude accounts appear once Claude Code is used").font(.system(size: 11)).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(10)
+        .frame(height: 50)
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func limits(_ account: ClaudeAccount) -> String {
+        func percent(_ window: RateLimitWindow?) -> String { window.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—" }
+        return "5 hours \(percent(account.fiveHour)) · Week \(percent(account.sevenDay))"
     }
 }
