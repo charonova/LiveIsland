@@ -217,3 +217,132 @@ public enum ClaudeLogin {
         return Data(escaped.utf8)
     }
 }
+
+/// What LiveIsland remembers about each account: no secrets (those stay in the Keychain),
+/// just who it is and its limits when last seen.
+public struct AccountBook: Codable, Equatable, Sendable {
+    public struct Entry: Codable, Equatable, Sendable {
+        public var identity: ClaudeAccountIdentity
+        public var fiveHour: RateLimitWindow?
+        public var sevenDay: RateLimitWindow?
+        public var limitsObservedAt: Date?
+        /// LiveIsland keeps a copy of this account's login, so it can switch to it.
+        public var hasSavedLogin: Bool
+        /// When the saved login stops working and needs a fresh /login.
+        public var loginExpiresAt: Date?
+
+        public init(identity: ClaudeAccountIdentity, hasSavedLogin: Bool = false) {
+            self.identity = identity
+            self.hasSavedLogin = hasSavedLogin
+        }
+    }
+
+    public var entries: [String: Entry] = [:]
+    public var activeKey: String?
+    /// When the active account last changed; nil when LiveIsland never saw it change.
+    public var activeSince: Date?
+
+    public init() {}
+
+    /// Notes the account Claude Code is logged in to now.
+    public mutating func setActive(_ identity: ClaudeAccountIdentity, at now: Date) {
+        if entries[identity.key] == nil {
+            entries[identity.key] = Entry(identity: identity)
+        } else {
+            entries[identity.key]!.identity = identity
+        }
+        guard activeKey != identity.key else { return }
+        if activeKey != nil { activeSince = now }
+        activeKey = identity.key
+    }
+
+    /// Files the status line's limits under the account they belong to. Every account's
+    /// windows reset at their own times, so a report whose reset times match an account's is
+    /// that account's, whichever is active: a session still on the previous login reports its
+    /// numbers. Anything else goes to the active account, once a request was made on it.
+    /// Returns false when the report can't be placed yet.
+    @discardableResult
+    public mutating func record(_ limits: ClaudeUsageLimits, latestRequestAt: Date?) -> Bool {
+        if let owner = entries.first(where: { Self.sameWindows($0.value, limits) })?.key {
+            store(limits, in: owner)
+            return true
+        }
+        guard let key = activeKey, entries[key] != nil,
+              Self.belongsToActive(observedAt: limits.observedAt, activeSince: activeSince, latestRequestAt: latestRequestAt)
+        else { return false }
+        store(limits, in: key)
+        return true
+    }
+
+    /// A request Claude refused for a limit: the account in use is out of room until the
+    /// notice's reset time. That's the only news an exhausted account ever gives, as it never
+    /// answers. A notice matching another account's reset time is that account's.
+    public mutating func record(_ notice: ClaudeLimitNotice) {
+        let window = RateLimitWindow(usedPercent: 100, windowMinutes: notice.type == "seven_day" ? 10_080 : 300, resetsAt: notice.resetsAt)
+        let owner = entries.first { entry in
+            let known = window.windowMinutes == 300 ? entry.value.fiveHour : entry.value.sevenDay
+            return Self.sameReset(known?.resetsAt, notice.resetsAt)
+        }?.key
+        guard let key = owner ?? activeKey, entries[key] != nil else { return }
+        // Only a refusal after the switch can be the new account's.
+        if owner == nil, let activeSince, notice.observedAt < activeSince { return }
+        if let seen = entries[key]!.limitsObservedAt, seen > notice.observedAt { return }
+        if window.windowMinutes == 300 { entries[key]!.fiveHour = window } else { entries[key]!.sevenDay = window }
+        entries[key]!.limitsObservedAt = notice.observedAt
+    }
+
+    private mutating func store(_ limits: ClaudeUsageLimits, in key: String) {
+        if let seen = entries[key]!.limitsObservedAt, seen > limits.observedAt { return }
+        entries[key]!.fiveHour = limits.fiveHour
+        entries[key]!.sevenDay = limits.sevenDay
+        entries[key]!.limitsObservedAt = limits.observedAt
+    }
+
+    /// After a switch, sessions keep showing the previous account's numbers until they make a
+    /// request on the new one (they pick up a new login within about 30 seconds). So only a
+    /// report made after a request that came after that counts.
+    public static func belongsToActive(observedAt: Date, activeSince: Date?, latestRequestAt: Date?) -> Bool {
+        guard let activeSince else { return true }
+        guard let request = latestRequestAt, request > activeSince.addingTimeInterval(30) else { return false }
+        return observedAt >= request
+    }
+
+    /// Same reset times for every window both sides know: the same account. Reset times move
+    /// only when a window starts over, and two accounts sharing both is vanishingly unlikely.
+    static func sameWindows(_ entry: Entry, _ limits: ClaudeUsageLimits) -> Bool {
+        let pairs = [(entry.fiveHour?.resetsAt, limits.fiveHour?.resetsAt), (entry.sevenDay?.resetsAt, limits.sevenDay?.resetsAt)]
+            .filter { $0.0 != nil && $0.1 != nil }
+        return !pairs.isEmpty && pairs.count == [limits.fiveHour?.resetsAt, limits.sevenDay?.resetsAt].compactMap { $0 }.count
+            && pairs.allSatisfy { sameReset($0.0, $0.1) }
+    }
+
+    static func sameReset(_ lhs: Date?, _ rhs: Date?) -> Bool {
+        guard let lhs, let rhs else { return false }
+        return abs(lhs.timeIntervalSince(rhs)) <= 90
+    }
+
+    /// Readings that ended up under two accounts: keep the newest, clear the others.
+    public mutating func removeDuplicateReadings() {
+        let read = entries.filter { $0.value.limitsObservedAt != nil }
+        for (key, entry) in read {
+            let limits = ClaudeUsageLimits(fiveHour: entry.fiveHour, sevenDay: entry.sevenDay, observedAt: entry.limitsObservedAt!)
+            let newer = read.contains { other in
+                other.key != key && Self.sameWindows(other.value, limits)
+                    && (other.value.limitsObservedAt! > entry.limitsObservedAt! || (other.value.limitsObservedAt! == entry.limitsObservedAt! && other.key == activeKey))
+            }
+            if newer {
+                entries[key]!.fiveHour = nil
+                entries[key]!.sevenDay = nil
+                entries[key]!.limitsObservedAt = nil
+            }
+        }
+    }
+
+    public mutating func remove(_ key: String) {
+        guard key != activeKey else {
+            entries[key]?.hasSavedLogin = false
+            return
+        }
+        entries[key] = nil
+    }
+}
