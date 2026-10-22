@@ -63,3 +63,112 @@ public enum ClaudePlan {
         return nil
     }
 }
+
+/// `~/.claude.json` edits that leave every byte outside the edited value as it was:
+/// Claude Code owns the file, so LiveIsland only ever swaps its `oauthAccount` object.
+public enum ClaudeConfigFile {
+    /// The raw JSON text of a top-level key's value.
+    public static func value(of key: String, in data: Data) -> Data? {
+        let bytes = [UInt8](data)
+        guard let range = topLevelValueRange(of: key, in: bytes) else { return nil }
+        return Data(bytes[range])
+    }
+
+    /// The file with a top-level key's value replaced by `value` (raw JSON text), or the key
+    /// added at the end when it's missing. Nil when the file isn't a JSON object.
+    public static func replacingValue(of key: String, in data: Data, with value: Data) -> Data? {
+        let bytes = [UInt8](data)
+        if let range = topLevelValueRange(of: key, in: bytes) {
+            return Data(bytes[..<range.lowerBound]) + value + Data(bytes[range.upperBound...])
+        }
+        // Missing (logged out): add it before the closing brace.
+        guard let close = bytes.lastIndex(where: { !isWhitespace($0) }), bytes[close] == UInt8(ascii: "}"),
+              let open = bytes.firstIndex(where: { !isWhitespace($0) }), bytes[open] == UInt8(ascii: "{")
+        else { return nil }
+        let isEmpty = bytes[(open + 1)..<close].allSatisfy(isWhitespace)
+        var end = close
+        while end > open + 1, isWhitespace(bytes[end - 1]) { end -= 1 }
+        let entry = Data((isEmpty ? "\n  " : ",\n  ").utf8) + Data("\"\(key)\": ".utf8) + value + Data("\n".utf8)
+        return Data(bytes[..<end]) + entry + Data(bytes[close...])
+    }
+
+    private static func isWhitespace(_ byte: UInt8) -> Bool {
+        byte == 0x20 || byte == 0x0A || byte == 0x0D || byte == 0x09
+    }
+
+    /// Walks only the top level of the object, skipping nested values whole, so a key of the
+    /// same name inside another object never matches.
+    static func topLevelValueRange(of key: String, in bytes: [UInt8]) -> Range<Int>? {
+        var index = 0
+        func skipWhitespace() { while index < bytes.count, isWhitespace(bytes[index]) { index += 1 } }
+        skipWhitespace()
+        guard index < bytes.count, bytes[index] == UInt8(ascii: "{") else { return nil }
+        index += 1
+        let wanted = Array(key.utf8)
+        while true {
+            skipWhitespace()
+            guard index < bytes.count, bytes[index] == UInt8(ascii: "\""), let keyEnd = endOfString(bytes, from: index) else { return nil }
+            let name = bytes[(index + 1)..<keyEnd]
+            index = keyEnd + 1
+            skipWhitespace()
+            guard index < bytes.count, bytes[index] == UInt8(ascii: ":") else { return nil }
+            index += 1
+            skipWhitespace()
+            let start = index
+            guard let end = endOfValue(bytes, from: index) else { return nil }
+            if name.elementsEqual(wanted) { return start..<end }
+            index = end
+            skipWhitespace()
+            guard index < bytes.count, bytes[index] == UInt8(ascii: ",") else { return nil }
+            index += 1
+        }
+    }
+
+    /// The index of the closing quote of the string starting at `start`.
+    private static func endOfString(_ bytes: [UInt8], from start: Int) -> Int? {
+        var index = start + 1
+        while index < bytes.count {
+            switch bytes[index] {
+            case UInt8(ascii: "\\"): index += 2
+            case UInt8(ascii: "\""): return index
+            default: index += 1
+            }
+        }
+        return nil
+    }
+
+    /// One past the end of the value starting at `start`.
+    private static func endOfValue(_ bytes: [UInt8], from start: Int) -> Int? {
+        guard start < bytes.count else { return nil }
+        switch bytes[start] {
+        case UInt8(ascii: "\""):
+            return endOfString(bytes, from: start).map { $0 + 1 }
+        case UInt8(ascii: "{"), UInt8(ascii: "["):
+            var depth = 0
+            var index = start
+            while index < bytes.count {
+                switch bytes[index] {
+                case UInt8(ascii: "\""):
+                    guard let end = endOfString(bytes, from: index) else { return nil }
+                    index = end
+                case UInt8(ascii: "{"), UInt8(ascii: "["):
+                    depth += 1
+                case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                    depth -= 1
+                    if depth == 0 { return index + 1 }
+                default:
+                    break
+                }
+                index += 1
+            }
+            return nil
+        default:
+            var index = start
+            while index < bytes.count, !isWhitespace(bytes[index]),
+                  bytes[index] != UInt8(ascii: ","), bytes[index] != UInt8(ascii: "}"), bytes[index] != UInt8(ascii: "]") {
+                index += 1
+            }
+            return index
+        }
+    }
+}
