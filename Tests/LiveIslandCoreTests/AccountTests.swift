@@ -261,4 +261,41 @@ struct AccountTests {
         #expect(ClaudeSwapJSON.switchResult(from: Data(error.utf8))?.switched == false)
         #expect(ClaudeSwapJSON.switchResult(from: Data(error.utf8))?.message == "Account-9 does not exist")
     }
+
+    @Test func mergesLiveIslandAndClaudeSwapAccounts() throws {
+        let a = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount().utf8)))
+        var book = AccountBook()
+        book.setActive(a, at: now)
+        book.entries[a.key]?.hasSavedLogin = true
+        book.entries[a.key]?.fiveHour = RateLimitWindow(usedPercent: 50, windowMinutes: 300, resetsAt: now.addingTimeInterval(600))
+        book.entries[a.key]?.limitsObservedAt = now
+        let swap = [
+            ClaudeSwapAccount(number: 1, email: "A@example.com", organizationName: nil, organizationUUID: nil, isActive: true, usageStatus: "ok",
+                              fiveHour: RateLimitWindow(usedPercent: 10, windowMinutes: 300, resetsAt: now.addingTimeInterval(600)), sevenDay: nil,
+                              usageFetchedAt: now.addingTimeInterval(-60), isDisabled: false),
+            ClaudeSwapAccount(number: 2, email: "b@example.com", organizationName: nil, organizationUUID: nil, isActive: false, usageStatus: "ok",
+                              fiveHour: RateLimitWindow(usedPercent: 5, windowMinutes: 300, resetsAt: now.addingTimeInterval(600)), sevenDay: nil,
+                              usageFetchedAt: now, isDisabled: false),
+        ]
+        let viaSwap = ClaudeAccounts.merge(book: book, claudeSwap: swap, switcher: .claudeSwap, now: now)
+        #expect(viaSwap.count == 2, "A matched by email although claude-swap left its organization out")
+        #expect(viaSwap[0].isActive && viaSwap[0].identity.email == "a@example.com")
+        #expect(viaSwap[0].fiveHour?.usedPercent == 50, "LiveIsland's own reading is newer than claude-swap's")
+        #expect(viaSwap[0].switcher == .claudeSwap && viaSwap[0].claudeSwapNumber == 1)
+        #expect(viaSwap[1].identity.email == "b@example.com" && viaSwap[1].switcher == .claudeSwap && viaSwap[1].fiveHour?.usedPercent == 5)
+
+        let native = ClaudeAccounts.merge(book: book, claudeSwap: nil, switcher: .liveIsland, now: now)
+        #expect(native.count == 1 && native[0].switcher == .liveIsland)
+        let off = ClaudeAccounts.merge(book: book, claudeSwap: nil, switcher: nil, now: now)
+        #expect(off[0].switcher == nil)
+    }
+
+    @Test func theBookSurvivesARestart() throws {
+        let a = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount().utf8)))
+        var book = AccountBook()
+        book.setActive(a, at: now)
+        book.entries[a.key]?.sevenDay = RateLimitWindow(usedPercent: 47, windowMinutes: 10_080, resetsAt: now)
+        let decoded = try JSONDecoder().decode(AccountBook.self, from: JSONEncoder().encode(book))
+        #expect(decoded == book)
+    }
 }
