@@ -70,6 +70,7 @@
 - Copy the command that resumes a session
 - **Usage limits as rings**: Claude Code's real 5-hour and weekly percentages (one click to set up, see below), Codex's 5-hour and weekly limits, tokens this window and today
 - Optional sound when an agent finishes or stops to ask you something
+- **Several Claude accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching (see below)
 
 **Calls, devices and the rest**
 - Call timer for FaceTime, Zoom, Teams, Discord, WhatsApp, Slack and more
@@ -98,6 +99,7 @@ Prefer to do it yourself? The lines are in [`scripts/claude-statusline-snippet.s
 | Spotify and Music | Their own "track changed" notifications, and AppleScript for details and controls. LiveIsland never scripts an app that isn't running, since that would open it |
 | Claude Code and Codex | Their session files (`~/.claude/projects`, `~/.codex/sessions`), watched with FSEvents. Transcripts can be gigabytes, so only new bytes are read |
 | Where a session runs | The process table: each agent's folder and terminal, and the app above it |
+| Claude accounts | Who's logged in from `~/.claude.json`; logins (only when you choose LiveIsland switching) through the system `security` tool, the way Claude Code itself stores them |
 | Microphone, camera, calls | Core Audio's process list and CoreMediaIO. Only *whether* they're in use, never what they hear or see |
 | Battery, AirPods | IOKit power notifications; IOBluetooth and `system_profiler` for AirPods levels |
 | Calendar | EventKit, read only |
@@ -128,6 +130,7 @@ You need the Xcode Command Line Tools and CMake (`brew install cmake`), which bu
 - **Calendar**, for your next events
 - **Bluetooth**, for AirPods battery
 - **Automation** for Spotify and Music (now playing and controls), and for Terminal or iTerm2 the first time you jump to a session there
+- Nothing for Claude accounts: switching is off until you turn it on, and the Keychain items it uses are written by the system `security` tool
 
 Everything works without any of them; the matching feature just stays empty.
 
