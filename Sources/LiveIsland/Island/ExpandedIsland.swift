@@ -1236,3 +1236,40 @@ private struct CameraTile: View {
         }
     }
 }
+
+// MARK: - Shared
+
+/// App icons and names, looked up once.
+@MainActor
+enum AppInfo {
+    private static var icons: [String: NSImage] = [:]
+    private static var names: [String: String] = [:]
+
+    static func icon(_ bundleIdentifier: String?) -> NSImage? {
+        guard let bundleIdentifier else { return nil }
+        if let icon = icons[bundleIdentifier] { return icon }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icons[bundleIdentifier] = icon
+        return icon
+    }
+
+    static func name(_ bundleIdentifier: String?) -> String? {
+        guard let bundleIdentifier else { return nil }
+        if let name = names[bundleIdentifier] { return name }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else { return nil }
+        let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        names[bundleIdentifier] = name
+        return name
+    }
+}
+
+/// Plain buttons that dip slightly when pressed.
+struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.88 : 1)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
