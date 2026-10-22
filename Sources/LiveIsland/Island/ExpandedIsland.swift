@@ -250,3 +250,166 @@ private struct ArtworkGlow: View {
         }
     }
 }
+
+// MARK: - Media
+
+private struct MediaPage: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        if let track = model.nowPlaying {
+            let accent = model.accent
+            VStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 16) {
+                    CoverArt(track: track, accent: accent)
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(track.title).font(.system(size: 17, weight: .bold)).lineLimit(1)
+                                Text(subtitle(track)).font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "waveform")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(accent)
+                                .symbolEffect(.variableColor.iterative.reversing, isActive: track.isPlaying)
+                                .opacity(track.isPlaying ? 1 : 0.35)
+                        }
+                        Spacer(minLength: 8)
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            ScrubBar(track: track, now: context.date, accent: accent)
+                        }
+                        Spacer(minLength: 6)
+                        Controls(track: track, accent: accent)
+                    }
+                    .frame(height: 116)
+                }
+                HStack(spacing: 12) {
+                    PlayerSwitcher()
+                    Spacer(minLength: 0)
+                    VolumeRow(accent: accent)
+                }
+                .frame(height: 26)
+                QueueStrip(accent: accent)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        } else {
+            EmptyMedia()
+        }
+    }
+
+    private func subtitle(_ track: NowPlaying) -> String {
+        let parts = [track.artist, track.album].filter { !$0.isEmpty }
+        return parts.isEmpty ? AppInfo.name(track.bundleIdentifier) ?? " " : parts.joined(separator: " — ")
+    }
+}
+
+private struct CoverArt: View {
+    @EnvironmentObject private var model: IslandModel
+    let track: NowPlaying
+    let accent: Color
+
+    var body: some View {
+        Button { model.openPlayerApp() } label: {
+            ZStack(alignment: .bottomTrailing) {
+                Artwork(image: model.artwork(for: track)?.image, size: 116, corner: 22)
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
+                    .shadow(color: accent.opacity(0.45), radius: 18, y: 6)
+                    .scaleEffect(track.isPlaying ? 1 : 0.94)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.7), value: track.isPlaying)
+                if let icon = AppInfo.icon(track.bundleIdentifier) {
+                    Image(nsImage: icon).resizable().frame(width: 28, height: 28)
+                        .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
+                        .offset(x: 7, y: 7)
+                }
+            }
+        }
+        .buttonStyle(PressableStyle())
+        .help("Open \(AppInfo.name(track.bundleIdentifier) ?? "the app")")
+    }
+}
+
+private struct ScrubBar: View {
+    @EnvironmentObject private var model: IslandModel
+    let track: NowPlaying
+    let now: Date
+    let accent: Color
+
+    var body: some View {
+        let duration = track.duration ?? 0
+        let fraction = model.scrubbing ?? track.progress(at: now) ?? 0
+        let position = model.scrubbing.map { $0 * duration } ?? track.position(at: now) ?? 0
+        VStack(spacing: 4) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.16))
+                    Capsule()
+                        .fill(LinearGradient(colors: [accent.opacity(0.85), .white], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(6, proxy.size.width * CGFloat(fraction)))
+                        .shadow(color: accent.opacity(0.6), radius: 4)
+                }
+                .frame(height: model.scrubbing == nil ? 5 : 8)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        guard duration > 0 else { return }
+                        model.scrubbing = min(max(0, Double(drag.location.x / proxy.size.width)), 1)
+                    }
+                    .onEnded { drag in
+                        guard duration > 0 else { return }
+                        model.seek(to: min(max(0, Double(drag.location.x / proxy.size.width)), 1) * duration)
+                        model.scrubbing = nil
+                    })
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: model.scrubbing == nil)
+            }
+            .frame(height: 10)
+            HStack {
+                Text(Format.clock(position))
+                Spacer()
+                Text(duration > 0 ? "-" + Format.clock(max(0, duration - position)) : "Live")
+            }
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+}
+
+private struct Controls: View {
+    @EnvironmentObject private var model: IslandModel
+    let track: NowPlaying
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 0) {
+            control("gobackward.15", size: 15) { model.skip(by: -15) }.help("Back 15 seconds")
+            Spacer(minLength: 0)
+            control("backward.fill", size: 18) { model.previousTrack() }
+            Spacer(minLength: 0)
+            Button { model.togglePlayPause() } label: {
+                Image(systemName: track.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 46, height: 46)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(PressableStyle())
+            .liquidGlass(in: Circle(), tint: accent.opacity(0.35), interactive: true)
+            Spacer(minLength: 0)
+            control("forward.fill", size: 18) { model.nextTrack() }
+            Spacer(minLength: 0)
+            control("goforward.15", size: 15) { model.skip(by: 15) }.help("Forward 15 seconds")
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private func control(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: size, weight: .semibold))
+                .frame(width: 34, height: 34).contentShape(Circle())
+        }
+        .buttonStyle(PressableStyle())
+    }
+}
