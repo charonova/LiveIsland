@@ -137,3 +137,70 @@ struct CodexRolloutTests {
         #expect(CodexRollout.state(of: tail, modified: now, now: now.addingTimeInterval(60)) == .idle)
     }
 }
+
+@Suite struct ClaudeLimitsTests {
+    let modified = Date(timeIntervalSince1970: 1_792_800_000)
+
+    @Test func readsTheStatusLineShape() throws {
+        let json = #"{"observed_at":1792801000.5,"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":1792810000},"seven_day":{"used_percentage":47.5,"resets_at":"2026-10-24T08:00:00Z"}}}"#
+        let limits = try #require(ClaudeUsageLimits.parse(Fixture.data(json), modified: modified))
+        #expect(limits.fiveHour?.usedPercent == 30)
+        #expect(limits.fiveHour?.label == "5-hour")
+        #expect(limits.fiveHour?.resetsAt == Date(timeIntervalSince1970: 1_792_810_000))
+        #expect(limits.sevenDay?.usedPercent == 47.5)
+        #expect(limits.sevenDay?.label == "Weekly")
+        #expect(limits.sevenDay?.resetsAt == Format.date(iso8601: "2026-10-24T08:00:00Z"))
+        #expect(limits.observedAt == Date(timeIntervalSince1970: 1_792_801_000.5))
+    }
+
+    @Test func fallsBackToTheFileDateAndIgnoresOtherShapes() {
+        let bare = #"{"model":{"id":"x"},"rate_limits":{"five_hour":{"used_percentage":12}}}"#
+        #expect(ClaudeUsageLimits.parse(Fixture.data(bare), modified: modified)?.observedAt == modified)
+        #expect(ClaudeUsageLimits.parse(Fixture.data(#"{"rate_limits":null}"#), modified: modified) == nil)
+        #expect(ClaudeUsageLimits.parse(Fixture.data(#"{"rate_limits":{}}"#), modified: modified) == nil)
+        #expect(ClaudeUsageLimits.parse(Fixture.data("not json"), modified: modified) == nil)
+    }
+
+    @Test func aWindowThatResetCountsFromZero() throws {
+        let json = #"{"rate_limits":{"five_hour":{"used_percentage":80,"resets_at":1792801000},"seven_day":{"used_percentage":50,"resets_at":1793400000}}}"#
+        let limits = try #require(ClaudeUsageLimits.parse(Fixture.data(json), modified: modified))
+        let later = limits.current(at: Date(timeIntervalSince1970: 1_792_802_000))
+        #expect(later.fiveHour?.usedPercent == 0)
+        #expect(later.fiveHour?.resetsAt == nil)
+        #expect(later.sevenDay?.usedPercent == 50)
+    }
+}
+
+@Suite struct SessionTests {
+    @Test func claudeResumeCommandStartsInTheProjectFolder() {
+        let session = AgentSession(id: "/Users/me/.claude/projects/-Users-me-app/5f0c1a2b-1111-2222-3333-444455556666.jsonl",
+                                   kind: .claude, project: "app", state: .idle, lastActivity: Date(), cwd: "/Users/me/it's app")
+        #expect(session.sessionID == "5f0c1a2b-1111-2222-3333-444455556666")
+        #expect(session.resumeCommand == #"cd '/Users/me/it'\''s app' && claude --resume 5f0c1a2b-1111-2222-3333-444455556666"#)
+    }
+
+    @Test func codexSessionIDComesFromTheRolloutName() {
+        let session = AgentSession(id: "/Users/me/.codex/sessions/2026/10/22/rollout-2026-10-22T10-15-00-0199f2c4-7a1b-7c2d-8e3f-a1b2c3d4e5f6.jsonl",
+                                   kind: .codex, project: "api", state: .idle, lastActivity: Date())
+        #expect(session.sessionID == "0199f2c4-7a1b-7c2d-8e3f-a1b2c3d4e5f6")
+        #expect(session.resumeCommand == "codex resume 0199f2c4-7a1b-7c2d-8e3f-a1b2c3d4e5f6")
+        let odd = AgentSession(id: "/tmp/rollout-short.jsonl", kind: .codex, project: "x", state: .idle, lastActivity: Date())
+        #expect(odd.sessionID == nil)
+        #expect(odd.resumeCommand == nil)
+    }
+}
+
+@Suite struct SessionHostTests {
+    @Test func projectKeyMatchesClaudeCodeFolders() {
+        #expect(ClaudeTranscript.projectKey(for: "/Users/aissam") == "-Users-aissam")
+        #expect(ClaudeTranscript.projectKey(for: "/Users/me/Code/my.app_v2") == "-Users-me-Code-my-app-v2")
+    }
+
+    @Test func picksTheDeepestOpenFolderThatContainsThePath() {
+        let open = ["/Users/me/Code/web", "/Users/me/Code/web/api", "/Users/me/Code/website"]
+        #expect(SessionHost.window(for: "/Users/me/Code/web/api/src", among: open) == "/Users/me/Code/web/api")
+        #expect(SessionHost.window(for: "/Users/me/Code/web", among: open) == "/Users/me/Code/web")
+        #expect(SessionHost.window(for: "/Users/me/Code/websites", among: open) == nil)
+    }
+}
+
