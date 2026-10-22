@@ -412,3 +412,59 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
             .min { ($0.used ?? 99.5) < ($1.used ?? 99.5) }
     }
 }
+
+/// One account in claude-swap's `cswap list --json`.
+public struct ClaudeSwapAccount: Equatable, Sendable {
+    public var number: Int
+    public var email: String
+    public var organizationName: String?
+    public var organizationUUID: String?
+    public var isActive: Bool
+    /// "ok", "relogin_required", "token_expired", …
+    public var usageStatus: String
+    public var fiveHour: RateLimitWindow?
+    public var sevenDay: RateLimitWindow?
+    public var usageFetchedAt: Date?
+    public var isDisabled: Bool
+
+    public var needsLogin: Bool { usageStatus == "relogin_required" }
+}
+
+/// claude-swap's JSON (schema version 1).
+public enum ClaudeSwapJSON {
+    public static func accounts(from data: Data) -> [ClaudeSwapAccount]? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rows = object["accounts"] as? [[String: Any]]
+        else { return nil }
+        return rows.compactMap { row in
+            guard let number = row["number"] as? Int, let email = row["email"] as? String else { return nil }
+            let usage = row["usage"] as? [String: Any]
+            return ClaudeSwapAccount(
+                number: number, email: email,
+                organizationName: (row["organizationName"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                organizationUUID: (row["organizationUuid"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                isActive: row["active"] as? Bool ?? false,
+                usageStatus: row["usageStatus"] as? String ?? "unavailable",
+                fiveHour: window(usage?["fiveHour"], minutes: 300),
+                sevenDay: window(usage?["sevenDay"], minutes: 10_080),
+                usageFetchedAt: (row["usageFetchedAt"] as? String).flatMap(Format.date(iso8601:)),
+                isDisabled: row["disabled"] as? Bool ?? false)
+        }
+    }
+
+    private static func window(_ value: Any?, minutes: Int) -> RateLimitWindow? {
+        guard let value = value as? [String: Any], let used = value["pct"] as? Double else { return nil }
+        return RateLimitWindow(usedPercent: used, windowMinutes: minutes,
+                               resetsAt: (value["resetsAt"] as? String).flatMap(Format.date(iso8601:)))
+    }
+
+    /// `cswap switch … --json`: whether it switched, and what it said (or the error).
+    public static func switchResult(from data: Data) -> (switched: Bool, message: String)? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let error = object["error"] as? [String: Any] {
+            return (false, error["message"] as? String ?? "claude-swap couldn't switch")
+        }
+        guard let switched = object["switched"] as? Bool else { return nil }
+        return (switched, object["message"] as? String ?? "")
+    }
+}
