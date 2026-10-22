@@ -205,4 +205,60 @@ struct AccountTests {
         #expect(book.entries[a.key]?.fiveHour?.usedPercent == 59, "the newest reading stays")
         #expect(book.entries[b.key]?.fiveHour == nil && book.entries[b.key]?.limitsObservedAt == nil)
     }
+
+    @Test func picksTheAccountWithTheMostRoom() {
+        func account(_ email: String, active: Bool = false, five: Double?, week: Double?, switcher: ClaudeAccount.Switcher? = .liveIsland,
+                     needsLogin: Bool = false) -> ClaudeAccount {
+            ClaudeAccount(identity: ClaudeAccountIdentity(accountUUID: email, email: email), isActive: active,
+                          fiveHour: five.map { RateLimitWindow(usedPercent: $0, windowMinutes: 300, resetsAt: now.addingTimeInterval(600)) },
+                          sevenDay: week.map { RateLimitWindow(usedPercent: $0, windowMinutes: 10_080, resetsAt: now.addingTimeInterval(86_400)) },
+                          limitsObservedAt: now, switcher: switcher, needsLogin: needsLogin)
+        }
+        let accounts = [
+            account("active", active: true, five: 100, week: 50),
+            account("busy", five: 80, week: 20),
+            account("roomy", five: 10, week: 30),
+            account("full", five: 5, week: 100),
+            account("expired", five: 0, week: 0, needsLogin: true),
+            account("unswitchable", five: 0, week: 0, switcher: nil),
+            account("unknown", five: nil, week: nil),
+        ]
+        #expect(ClaudeAccount.best(accounts, at: now)?.identity.email == "roomy")
+        #expect(accounts[0].isAtLimit)
+        #expect(accounts[0].exhaustedWindow?.windowMinutes == 300)
+        // A window that has reset counts from zero.
+        let later = now.addingTimeInterval(700)
+        #expect(accounts[1].current(at: later).used == 20)
+    }
+
+    @Test func readsClaudeSwapsList() throws {
+        let json = #"""
+        {"schemaVersion":1,"activeAccountNumber":2,"accounts":[
+         {"number":1,"email":"a@example.com","organizationName":"","organizationUuid":"","isOrganization":false,"active":false,
+          "usageStatus":"ok","usage":{"fiveHour":{"pct":12.5,"resetsAt":"2026-10-22T18:00:00Z","countdown":"2h"},"sevenDay":{"pct":40,"resetsAt":"2026-10-25T08:00:00+00:00"}},
+          "usageFetchedAt":"2026-10-22T16:00:00Z"},
+         {"number":2,"email":"b@example.com","organizationName":"Team","organizationUuid":"org-b","isOrganization":true,"active":true,"usageStatus":"relogin_required","usage":null},
+         {"number":3,"email":"c@example.com","organizationName":"","organizationUuid":"","active":false,"usageStatus":"ok","usage":null,"disabled":true}
+        ]}
+        """#
+        let accounts = try #require(ClaudeSwapJSON.accounts(from: Data(json.utf8)))
+        #expect(accounts.count == 3)
+        #expect(accounts[0].organizationUUID == nil)
+        #expect(accounts[0].fiveHour?.usedPercent == 12.5)
+        #expect(accounts[0].fiveHour?.resetsAt == Format.date(iso8601: "2026-10-22T18:00:00Z"))
+        #expect(accounts[0].sevenDay?.resetsAt == Format.date(iso8601: "2026-10-25T08:00:00Z"))
+        #expect(accounts[0].usageFetchedAt == Format.date(iso8601: "2026-10-22T16:00:00Z"))
+        #expect(accounts[1].isActive && accounts[1].needsLogin && accounts[1].fiveHour == nil)
+        #expect(accounts[2].isDisabled)
+        #expect(ClaudeSwapJSON.accounts(from: Data("nope".utf8)) == nil)
+    }
+
+    @Test func readsClaudeSwapsSwitchResult() {
+        let ok = #"{"schemaVersion":1,"switched":true,"from":{"number":1,"email":"a@example.com"},"to":{"number":2,"email":"b@example.com"},"strategy":null,"reason":"switched","message":"Switched to Account-2 (b@example.com)","warnings":[]}"#
+        #expect(ClaudeSwapJSON.switchResult(from: Data(ok.utf8))?.switched == true)
+        #expect(ClaudeSwapJSON.switchResult(from: Data(ok.utf8))?.message == "Switched to Account-2 (b@example.com)")
+        let error = #"{"schemaVersion":1,"error":{"type":"SwitchError","message":"Account-9 does not exist"}}"#
+        #expect(ClaudeSwapJSON.switchResult(from: Data(error.utf8))?.switched == false)
+        #expect(ClaudeSwapJSON.switchResult(from: Data(error.utf8))?.message == "Account-9 does not exist")
+    }
 }
