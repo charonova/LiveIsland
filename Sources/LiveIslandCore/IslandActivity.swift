@@ -7,6 +7,8 @@ public enum IslandActivity: Equatable, Sendable {
     case timerFinished
     case timer(endsAt: Date)
     case agentNeedsYou(AgentKind, project: String)
+    /// The Claude account in use ran out, and another one has room.
+    case accountLimit(account: String, switchTo: String)
     case agentDone(AgentKind, project: String)
     case headphonesConnected(name: String, battery: Int?)
     case charging(percent: Int)
@@ -22,6 +24,7 @@ public enum IslandActivity: Equatable, Sendable {
         case .call: return 100
         case .timerFinished: return 95
         case .agentNeedsYou: return 90
+        case .accountLimit: return 88
         case .headphonesConnected: return 85
         case .charging: return 84
         case .agentDone: return 80
