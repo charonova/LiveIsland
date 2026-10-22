@@ -1,0 +1,29 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  build:
+    # Liquid Glass needs the macOS 26 SDK or later.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: ./scripts/test.sh
+
+      # The runner image includes CMake, which builds the media adapter.
+      - name: Build app
+        run: ./scripts/build.sh
+
+      - name: Package
+        run: ditto -c -k --keepParent build/LiveIsland.app LiveIsland.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiveIsland
+          path: LiveIsland.zip
