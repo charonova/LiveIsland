@@ -88,6 +88,13 @@ final class IslandModel: ObservableObject {
     @Published var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
     @Published var ambientGlow: Bool { didSet { save(ambientGlow, Key.glow) } }
     @Published var agentSounds: Bool { didSet { save(agentSounds, Key.sounds) } }
+    /// How LiveIsland switches Claude accounts, if at all. Off until the user picks one.
+    @Published var accountSwitching: AccountsMonitor.Switching {
+        didSet {
+            defaults.set(accountSwitching.rawValue, forKey: Key.switching)
+            accountsMonitor.mode = accountSwitching
+        }
+    }
     @Published var controlPlayers: Bool {
         didSet {
             save(controlPlayers, Key.players)
@@ -98,6 +105,7 @@ final class IslandModel: ObservableObject {
 
     let media = NowPlayingProvider()
     let volume = OutputVolume()
+    private let accountsMonitor = AccountsMonitor()
     private let scripted = ScriptedPlayers()
     private let agentMonitor = AgentMonitor()
     private let systemMonitor = SystemMonitor()
@@ -126,6 +134,7 @@ final class IslandModel: ObservableObject {
         ambientGlow = defaults.bool(forKey: Key.glow)
         agentSounds = defaults.bool(forKey: Key.sounds)
         controlPlayers = defaults.bool(forKey: Key.players)
+        accountSwitching = defaults.string(forKey: Key.switching).flatMap(AccountsMonitor.Switching.init(rawValue:)) ?? .off
     }
 
     func start() {
@@ -139,6 +148,9 @@ final class IslandModel: ObservableObject {
         calendar.onUpdate = { [weak self] in self?.events = $0 }
         media.start()
         volume.start()
+        accountsMonitor.onUpdate = { [weak self] in self?.accountsState = $0 }
+        accountsMonitor.mode = accountSwitching
+        accountsMonitor.start()
         if controlPlayers { scripted.start() }
         agentMonitor.start()
         systemMonitor.start()
@@ -151,6 +163,7 @@ final class IslandModel: ObservableObject {
     func stop() {
         media.stop()
         volume.stop()
+        accountsMonitor.stop()
         scripted.stop()
         agentMonitor.stop()
         systemMonitor.stop()
@@ -508,5 +521,6 @@ final class IslandModel: ObservableObject {
         static let glow = "ambientGlow"
         static let sounds = "agentSounds"
         static let players = "controlPlayers"
+        static let switching = "accountSwitching"
     }
 }
