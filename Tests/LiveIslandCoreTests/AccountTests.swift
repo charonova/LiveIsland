@@ -82,4 +82,22 @@ struct AccountTests {
         #expect((try JSONSerialization.jsonObject(with: empty) as? [String: Any])?["k"] as? Int == 1)
         #expect(ClaudeConfigFile.replacingValue(of: "k", in: Data("[1]".utf8), with: Data("1".utf8)) == nil)
     }
+
+    @Test func replacesOnlyTheClaudeLoginAndKeepsMCPLogins() throws {
+        let credentials = Data(AccountFixture.credentials.utf8)
+        let login = try #require(ClaudeLogin.extract(from: credentials))
+        #expect(login["refreshToken"] as? String == "old-refresh")
+        let expiry = ClaudeLogin.expiry(of: login)
+        #expect(expiry.access == Date(timeIntervalSince1970: 1_792_900_000))
+        #expect(expiry.login == Date(timeIntervalSince1970: 1_800_000_000))
+
+        let next: [String: Any] = ["accessToken": "new-access", "refreshToken": "new-refresh", "note": "café"]
+        let merged = try #require(ClaudeLogin.replacing(in: credentials, with: next))
+        #expect(merged.allSatisfy { $0 < 0x80 }, "security -w prints only ASCII as text")
+        let object = try #require(try JSONSerialization.jsonObject(with: merged) as? [String: Any])
+        #expect((object["claudeAiOauth"] as? [String: Any])?["refreshToken"] as? String == "new-refresh")
+        #expect((object["claudeAiOauth"] as? [String: Any])?["note"] as? String == "café")
+        let mcp = (object["mcpOAuth"] as? [String: Any])?["figma|1"] as? [String: Any]
+        #expect(mcp?["accessToken"] as? String == "mcp-token")
+    }
 }
