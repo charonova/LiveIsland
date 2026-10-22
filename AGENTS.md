@@ -68,6 +68,17 @@ ffmpeg -i recording.mov -an -vf "crop=2200:1430:1398:0,fps=30,scale=1100:-2:flag
 ffmpeg -ss 58.5 -i recording.mov -frames:v 1 -vf "crop=1260:620:1418:0" -q:v 3 demo/island-agents.jpg   # one per page
 ```
 
+Blur email addresses before anything leaves the Mac (the Accounts tab and Settings show them). Blur each email line while the tab is open, and the whole name column while rows re-sort after a switch, so no address slides past mid-animation; find those moments with `select='gt(scene,0.05)'` on the column. Then check the column frame by frame:
+
+```bash
+ON="between(t,14.6,31.2)"                     # when the Accounts tab is open
+MOVE="between(t,17.3,17.85)+between(t,23.05,23.55)"   # when its rows move
+BLUR="boxblur=luma_radius=18:luma_power=3:chroma_radius=9:chroma_power=3"
+ffmpeg -i recording.mov -an -filter_complex "[0:v]crop=2200:1430:1398:0,split=3[base][e1][col];\
+[e1]crop=306:44:132:203,${BLUR}[b1];[col]crop=306:310:132:164,boxblur=30:3:30:3[bc];\
+[base][b1]overlay=132:203:enable='${ON}'[v1];[v1][bc]overlay=132:164:enable='${MOVE}'" clean.mp4   # one band per row
+```
+
 ## Style
 
 Match the surrounding code: small focused types, doc comments that explain *why*, plain user-facing wording.
