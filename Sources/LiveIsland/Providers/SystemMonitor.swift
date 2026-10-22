@@ -1,4 +1,5 @@
 import AppKit
+import CoreBluetooth
 import CoreAudio
 import CoreMediaIO
 import IOBluetooth
@@ -57,6 +58,7 @@ final class SystemMonitor: NSObject {
     private var connectNotification: IOBluetoothUserNotification?
     private var disconnectNotifications: [IOBluetoothUserNotification] = []
     private var startedAt = Date()
+    private let bluetooth = BluetoothAccess()
     /// When each device was last announced; macOS can report one connection several times.
     private var announced: [String: Date] = [:]
 
@@ -79,6 +81,14 @@ final class SystemMonitor: NSObject {
             MainActor.assumeIsolated { self?.refreshDevices() }
         }
         startPowerMonitoring()
+        bluetooth.whenGranted { [weak self] in self?.startWatchingHeadphones() }
+    }
+
+    /// Only once Bluetooth access is granted: before that, IOBluetooth's first call waits for
+    /// the user's answer to the permission prompt, freezing the whole app.
+    private func startWatchingHeadphones() {
+        // Devices already connected get reported as they're registered; those aren't news.
+        startedAt = Date()
         connectNotification = IOBluetoothDevice.register(forConnectNotifications: self, selector: #selector(bluetoothConnected(_:device:)))
         for device in (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] ?? []) where device.isConnected() && Self.isAudio(device) {
             watchDisconnect(of: device)
@@ -301,5 +311,34 @@ final class SystemMonitor: NSObject {
         guard next != snapshot else { return }
         snapshot = next
         onUpdate?(next)
+    }
+}
+
+/// Asks for Bluetooth access without blocking. CoreBluetooth shows the permission prompt and
+/// reports the answer later; IOBluetooth would wait for it on the calling thread.
+@MainActor
+private final class BluetoothAccess: NSObject, CBCentralManagerDelegate {
+    private var manager: CBCentralManager?
+    private var onGranted: (() -> Void)?
+
+    func whenGranted(_ action: @escaping () -> Void) {
+        switch CBManager.authorization {
+        case .allowedAlways:
+            action()
+        case .notDetermined:
+            onGranted = action
+            manager = CBCentralManager(delegate: self, queue: .main, options: [CBCentralManagerOptionShowPowerAlertKey: false])
+        default:
+            log.notice("Bluetooth access is off; headphones won't show")
+        }
+    }
+
+    nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        MainActor.assumeIsolated {
+            guard CBManager.authorization == .allowedAlways, let action = onGranted else { return }
+            onGranted = nil
+            manager = nil
+            action()
+        }
     }
 }
