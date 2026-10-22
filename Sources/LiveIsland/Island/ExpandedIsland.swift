@@ -877,13 +877,32 @@ private struct ProviderTitle: View {
 private struct ClaudeUsage: View {
     @EnvironmentObject private var model: IslandModel
 
+    /// The limits of the account in use. Once LiveIsland knows several accounts, only numbers
+    /// filed under the active one count: right after a switch the status line still shows the
+    /// previous account's until Claude answers on the new one.
+    private var activeWindows: [RateLimitWindow]? {
+        if model.accounts.count > 1 {
+            let windows = [model.accountsState.active?.fiveHour, model.accountsState.active?.sevenDay].compactMap { $0 }
+            return windows.isEmpty ? nil : windows
+        }
+        return model.agents.claudeLimits?.windows
+    }
+
+    /// Which account, when there's more than one; else today's tokens.
+    private func detail(_ usage: UsageSummary?) -> String? {
+        if model.accounts.count > 1, let active = model.accountsState.active {
+            return active.identity.email.components(separatedBy: "@").first
+        }
+        return usage.map { "Today \(Format.tokens($0.todayTokens))" }
+    }
+
     var body: some View {
         let usage = model.agents.usage
         VStack(alignment: .leading, spacing: 8) {
-            ProviderTitle(kind: .claude, detail: usage.map { "Today \(Format.tokens($0.todayTokens))" })
-            if let limits = model.agents.claudeLimits {
+            ProviderTitle(kind: .claude, detail: detail(usage))
+            if let windows = activeWindows {
                 HStack(spacing: 0) {
-                    ForEach(limits.windows, id: \.windowMinutes) { window in
+                    ForEach(windows, id: \.windowMinutes) { window in
                         RingGauge(window: window, tint: AgentGlyph(kind: .claude).color).frame(maxWidth: .infinity)
                     }
                 }
