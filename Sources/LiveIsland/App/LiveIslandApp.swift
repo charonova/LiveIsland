@@ -39,15 +39,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.stop()
     }
 
-    /// liveisland:// links, e.g. from Shortcuts: open, close, settings, timer/<minutes>.
+    /// liveisland:// links, e.g. from Shortcuts: open[/media|agents|activity|accounts], close,
+    /// settings[/general|island|media|agents|about], timer/<minutes>.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme == "liveisland" {
             Logger(subsystem: "com.aissam.liveisland", category: "url").notice("Open \(url.absoluteString, privacy: .public)")
             let parts = [url.host].compactMap { $0 } + url.pathComponents.filter { $0 != "/" }
+            let detail = parts.dropFirst().first?.lowercased()
             switch parts.first?.lowercased() {
-            case "open": model.expand()
+            case "open": model.expand(on: detail.flatMap { IslandTab(rawValue: $0.capitalized) })
             case "close": model.collapse()
-            case "settings": model.openSettings()
+            case "settings": model.openSettings(detail.flatMap(SettingsSection.init(rawValue:)) ?? .general)
             case "timer":
                 if let minutes = parts.dropFirst().first.flatMap(Double.init), minutes > 0 { model.startTimer(minutes: minutes) }
             default: break

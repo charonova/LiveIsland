@@ -307,8 +307,9 @@ final class IslandModel: ObservableObject {
 
     var accounts: [ClaudeAccount] { accountsState.accounts }
 
-    /// The account in use, when it ran out: by the status line's numbers, or by the notice
-    /// Claude Code logged when a request was refused.
+    /// The account in use, when it ran out: by its own numbers, which include the limit Claude
+    /// gave when it refused a request. A refusal still pending from the previous account
+    /// doesn't count.
     var exhaustedAccount: ClaudeAccount? {
         guard let active = accountsState.active, active.current(at: clock).isAtLimit else { return nil }
         return active
@@ -429,9 +430,10 @@ final class IslandModel: ObservableObject {
         isExpanded ? collapse() : expand()
     }
 
-    func expand() {
+    func expand(on requested: IslandTab? = nil) {
+        if isExpanded, let requested { tab = requested }
         guard !isExpanded else { return }
-        tab = suggestedTab
+        tab = requested ?? suggestedTab
         isExpanded = true
         accountsMonitor.isVisible = tab == .accounts
         if timerFinished { dismissTimerAlert() }
