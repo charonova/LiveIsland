@@ -159,7 +159,7 @@ struct CompactIsland: View {
         case .agentNeedsYou:
             Text("Needs you").foregroundStyle(.yellow)
         case .accountLimit:
-            Label("Switch", systemImage: "arrow.left.arrow.right").labelStyle(.titleAndIcon).foregroundStyle(.orange)
+            Text("Switch").foregroundStyle(.orange)
         case .agentDone:
             Label("Done", systemImage: "checkmark").labelStyle(.titleAndIcon).foregroundStyle(.green)
         case .agentWorking(_, _, let since):
