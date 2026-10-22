@@ -11,9 +11,48 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
 ![Tests](https://img.shields.io/badge/tests-42%20passing-success)
 
+<br>
+
+<a href="demo/demo.mp4"><img src="demo/demo.gif" width="720" alt="LiveIsland: the Media page with Spotify, the Agents page with Claude Code and Codex limits, the Activity page, then Recently Played"></a>
+
+<sub>Media, AI agents, activity and Recently Played. <a href="demo/demo.mp4">Watch the full video</a>, with Settings and the menu bar panel.</sub>
+
 </div>
 
 ---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="demo/island-media.jpg" alt="Media page: Spotify track with artwork glow, scrubber, controls, volume and Recently Played"><br>
+      <sub><b>Media</b><br>Any player, glow from the cover, Up Next</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="demo/island-agents.jpg" alt="Agents page: Claude Code sessions with states, and rings for the 5-hour and weekly limits of Claude Code and Codex"><br>
+      <sub><b>Agents</b><br>Sessions, states, real usage limits</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="demo/island-activity.jpg" alt="Activity page: timer presets, calendar, battery, AirPods, microphone and camera tiles"><br>
+      <sub><b>Activity</b><br>Timer, calendar, battery, devices, privacy</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="demo/island-compact.jpg" alt="The closed island: Claude working for 23 seconds, the microphone in use, a session done"><br>
+      <sub><b>In the notch</b><br>Working, microphone in use, done</sub>
+    </td>
+    <td align="center">
+      <img src="demo/menu-bar.jpg" width="220" alt="Menu bar panel: mini player, quick toggles, timer and Open Island"><br>
+      <sub><b>Menu bar</b><br>Mini player and quick switches</sub>
+    </td>
+    <td align="center">
+      <img src="demo/settings-agents.jpg" alt="Settings window, AI Agents page: agent toggles, sound, and Claude Code's 5-hour and weekly limits"><br>
+      <sub><b>Settings</b><br>Everything, in one window</sub>
+    </td>
+  </tr>
+</table>
 
 ## Features
 
