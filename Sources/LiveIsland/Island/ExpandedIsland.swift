@@ -413,3 +413,232 @@ private struct Controls: View {
         .buttonStyle(PressableStyle())
     }
 }
+
+/// Every player with something loaded (tap to switch), then installed players that are idle
+/// (tap to open and play).
+private struct PlayerSwitcher: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(model.players, id: \.bundleIdentifier) { player in
+                let selected = player.bundleIdentifier == model.nowPlaying?.bundleIdentifier
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { model.selectedPlayerID = player.bundleIdentifier }
+                } label: {
+                    chip(player.bundleIdentifier, named: selected, playing: player.isPlaying, selected: selected)
+                }
+                .buttonStyle(PressableStyle())
+                .help(player.title)
+            }
+            ForEach(model.idlePlayers, id: \.self) { bundle in
+                Button { model.launchPlayer(bundle) } label: {
+                    chip(bundle, named: false, playing: false, selected: false).opacity(0.55)
+                }
+                .buttonStyle(PressableStyle())
+                .help("Play in \(AppInfo.name(bundle) ?? "the app")")
+            }
+        }
+    }
+
+    private func chip(_ bundle: String?, named: Bool, playing: Bool, selected: Bool) -> some View {
+        HStack(spacing: 5) {
+            if let icon = AppInfo.icon(bundle) {
+                Image(nsImage: icon).resizable().frame(width: 16, height: 16)
+            }
+            if named {
+                Text(AppInfo.name(bundle) ?? "Player").font(.system(size: 11, weight: .semibold)).lineLimit(1)
+            }
+            if playing {
+                Image(systemName: "speaker.wave.2.fill").font(.system(size: 8, weight: .bold)).foregroundStyle(.green)
+            }
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 24)
+        .background(Capsule().fill(.white.opacity(selected ? 0.16 : 0.06)))
+        .overlay(Capsule().strokeBorder(.white.opacity(selected ? 0.2 : 0.06), lineWidth: 0.5))
+        .contentShape(Capsule())
+    }
+}
+
+/// Up Next from Music's playlist, or the tracks played earlier: tap one to play it.
+private struct QueueStrip: View {
+    @EnvironmentObject private var model: IslandModel
+    let accent: Color
+
+    var body: some View {
+        let current = model.nowPlaying
+        let queue = current?.bundleIdentifier.flatMap { model.upNext[$0] } ?? []
+        let history = model.history.filter { $0.trackID != current?.trackID }
+        if !queue.isEmpty || !history.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(queue.isEmpty ? "RECENTLY PLAYED" : "UP NEXT")
+                    .font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(.white.opacity(0.45))
+                ScrollView(.horizontal) {
+                    HStack(spacing: 6) {
+                        if let bundle = current?.bundleIdentifier, !queue.isEmpty {
+                            ForEach(Array(queue.enumerated()), id: \.element.id) { index, item in
+                                Button { model.play(item, in: bundle) } label: {
+                                    TrackChip(title: item.title, artist: item.artist, image: nil, number: index + 1, accent: accent)
+                                }
+                                .buttonStyle(PressableStyle())
+                            }
+                        } else {
+                            ForEach(history) { track in
+                                Button { model.play(track) } label: {
+                                    TrackChip(title: track.title, artist: track.artist, image: track.image, number: nil, accent: accent,
+                                              badge: AppInfo.icon(track.bundleIdentifier))
+                                }
+                                .buttonStyle(PressableStyle())
+                                .help("Play \(track.title) in \(AppInfo.name(track.bundleIdentifier) ?? "its app")")
+                            }
+                        }
+                    }
+                }
+                .scrollIndicators(.never)
+            }
+            .transition(.opacity)
+        }
+    }
+}
+
+private struct TrackChip: View {
+    let title: String
+    let artist: String
+    let image: NSImage?
+    let number: Int?
+    let accent: Color
+    var badge: NSImage? = nil
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ZStack {
+                if let image {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    LinearGradient(colors: [accent.opacity(0.55), accent.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Text(number.map(String.init) ?? "♪").font(.system(size: 12, weight: .bold, design: .rounded))
+                }
+            }
+            .frame(width: 30, height: 30)
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(alignment: .bottomTrailing) {
+                if let badge { Image(nsImage: badge).resizable().frame(width: 12, height: 12).offset(x: 3, y: 3) }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                Text(artist).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+            }
+            .frame(maxWidth: 110, alignment: .leading)
+        }
+        .padding(4)
+        .padding(.trailing, 6)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(.white.opacity(0.07)))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(.white.opacity(0.07), lineWidth: 0.5))
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+    }
+}
+
+private struct VolumeRow: View {
+    @EnvironmentObject private var model: IslandModel
+    let accent: Color
+
+    var body: some View {
+        if let output = model.output {
+            HStack(spacing: 8) {
+                Button { model.volume.toggleMute() } label: {
+                    Image(systemName: symbol(output)).font(.system(size: 12, weight: .semibold))
+                        .frame(width: 18).contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(PressableStyle())
+                .help(output.muted ? "Unmute" : "Mute")
+                if output.canSetVolume {
+                    CapsuleSlider(value: output.muted ? 0 : Double(output.volume), tint: .white) { model.volume.setVolume(Float($0)) }
+                        .frame(width: 120)
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: deviceSymbol(output)).font(.system(size: 10, weight: .semibold))
+                    Text(output.device).lineLimit(1)
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(maxWidth: 120, alignment: .leading)
+            }
+        }
+    }
+
+    private func symbol(_ output: OutputVolume.State) -> String {
+        if output.muted || output.volume == 0 { return "speaker.slash.fill" }
+        return output.volume < 0.34 ? "speaker.wave.1.fill" : output.volume < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
+    }
+
+    private func deviceSymbol(_ output: OutputVolume.State) -> String {
+        if output.isBluetooth { return HeadphoneSymbol.name(for: output.device) }
+        return output.isBuiltIn ? "laptopcomputer" : "hifispeaker.fill"
+    }
+}
+
+/// A thin slider that thickens while dragged.
+struct CapsuleSlider: View {
+    let value: Double
+    var tint: Color = .white
+    let onChange: (Double) -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.16))
+                Capsule().fill(tint).frame(width: max(5, proxy.size.width * CGFloat(min(max(value, 0), 1))))
+            }
+            .frame(height: 5)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
+                onChange(min(max(0, Double(drag.location.x / proxy.size.width)), 1))
+            })
+        }
+        .frame(height: 16)
+    }
+}
+
+private struct EmptyMedia: View {
+    var body: some View {
+        HStack(spacing: 18) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(red: 1, green: 0.3, blue: 0.45), Color(red: 0.55, green: 0.25, blue: 1)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: "music.note").font(.system(size: 40, weight: .semibold)).foregroundStyle(.white)
+            }
+            .frame(width: 110, height: 110)
+            .shadow(color: .pink.opacity(0.35), radius: 20, y: 6)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Nothing playing").font(.system(size: 18, weight: .bold))
+                Text("Music, podcasts and videos from any app show up here, with controls.")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    ForEach(["com.apple.Music", "com.spotify.client"], id: \.self) { bundle in
+                        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) {
+                            Button {
+                                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if let icon = AppInfo.icon(bundle) { Image(nsImage: icon).resizable().frame(width: 16, height: 16) }
+                                    Text("Open \(AppInfo.name(bundle) ?? "")").font(.system(size: 11, weight: .semibold))
+                                }
+                                .padding(.horizontal, 10)
+                                .frame(height: 28)
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(PressableStyle())
+                            .liquidGlass(in: Capsule(), interactive: true)
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxHeight: .infinity)
+    }
+}
