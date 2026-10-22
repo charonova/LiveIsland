@@ -172,3 +172,48 @@ public enum ClaudeConfigFile {
         }
     }
 }
+
+/// The Claude account part of Claude Code's credential item. The same item also holds the
+/// logins of the user's MCP servers, which must survive an account switch untouched.
+public enum ClaudeLogin {
+    public static let key = "claudeAiOauth"
+
+    public static func extract(from credentials: Data) -> [String: Any]? {
+        guard let object = try? JSONSerialization.jsonObject(with: credentials) as? [String: Any] else { return nil }
+        return object[key] as? [String: Any]
+    }
+
+    /// The credential item with only the Claude login replaced. ASCII-only, as Claude Code
+    /// reads the item back with `security -w`, which hex-encodes anything else.
+    public static func replacing(in credentials: Data, with login: [String: Any]) -> Data? {
+        guard var object = try? JSONSerialization.jsonObject(with: credentials) as? [String: Any] else { return nil }
+        object[key] = login
+        return asciiJSON(object)
+    }
+
+    /// When the access token and the login itself expire. Claude Code stores milliseconds.
+    public static func expiry(of login: [String: Any]) -> (access: Date?, login: Date?) {
+        func date(_ value: Any?) -> Date? {
+            guard let number = value as? Double, number > 0 else { return nil }
+            return Date(timeIntervalSince1970: number > 1e11 ? number / 1000 : number)
+        }
+        return (date(login["expiresAt"]), date(login["refreshTokenExpiresAt"]))
+    }
+
+    /// JSON with every non-ASCII character escaped, so `security -w` prints it as text.
+    public static func asciiJSON(_ object: Any) -> Data? {
+        guard let data = try? JSONSerialization.data(withJSONObject: object),
+              let text = String(data: data, encoding: .utf8)
+        else { return nil }
+        var escaped = ""
+        escaped.reserveCapacity(text.utf8.count)
+        for unit in text.utf16 {
+            if unit < 0x80 {
+                escaped.unicodeScalars.append(Unicode.Scalar(unit)!)
+            } else {
+                escaped += String(format: "\\u%04x", unit)
+            }
+        }
+        return Data(escaped.utf8)
+    }
+}
