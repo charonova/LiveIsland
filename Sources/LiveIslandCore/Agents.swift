@@ -100,7 +100,7 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
 }
 
 /// One rate-limit window as Codex reports it.
-public struct RateLimitWindow: Equatable, Sendable {
+public struct RateLimitWindow: Codable, Equatable, Sendable {
     public var usedPercent: Double
     public var windowMinutes: Int
     public var resetsAt: Date?
