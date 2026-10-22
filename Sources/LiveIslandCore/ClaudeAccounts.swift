@@ -468,3 +468,49 @@ public enum ClaudeSwapJSON {
         return (switched, object["message"] as? String ?? "")
     }
 }
+
+public enum ClaudeAccounts {
+    /// Everything LiveIsland knows, merged with claude-swap's list when it's used: claude-swap
+    /// adds accounts LiveIsland hasn't seen and fresher limits for the ones it isn't using.
+    public static func merge(book: AccountBook, claudeSwap: [ClaudeSwapAccount]?, switcher: ClaudeAccount.Switcher?,
+                             now: Date) -> [ClaudeAccount] {
+        var accounts: [String: ClaudeAccount] = [:]
+        for (key, entry) in book.entries {
+            let expired = entry.loginExpiresAt.map { $0 <= now } ?? false
+            accounts[key] = ClaudeAccount(
+                identity: entry.identity, isActive: key == book.activeKey,
+                fiveHour: entry.fiveHour, sevenDay: entry.sevenDay, limitsObservedAt: entry.limitsObservedAt,
+                switcher: switcher == .liveIsland && entry.hasSavedLogin ? .liveIsland : nil,
+                needsLogin: switcher == .liveIsland && entry.hasSavedLogin && expired)
+        }
+        for swap in claudeSwap ?? [] where !swap.isDisabled {
+            // claude-swap leaves the organization out for personal accounts: then the email decides.
+            let key = accounts.keys.first { existing in
+                let identity = accounts[existing]!.identity
+                guard identity.email.caseInsensitiveCompare(swap.email) == .orderedSame else { return false }
+                return swap.organizationUUID == nil || identity.organizationUUID == nil || identity.organizationUUID == swap.organizationUUID
+            } ?? ClaudeAccountIdentity.key(email: swap.email, organization: swap.organizationUUID)
+            var account = accounts[key] ?? ClaudeAccount(identity: ClaudeAccountIdentity(
+                accountUUID: "", email: swap.email, organizationUUID: swap.organizationUUID, organizationName: swap.organizationName))
+            if switcher == .claudeSwap {
+                account.switcher = .claudeSwap
+                account.claudeSwapNumber = swap.number
+                account.needsLogin = swap.needsLogin
+            }
+            // claude-swap measures every account; LiveIsland only sees the active one, so the
+            // newer of the two wins.
+            let fetched = swap.usageFetchedAt ?? now
+            if swap.fiveHour != nil || swap.sevenDay != nil, fetched > (account.limitsObservedAt ?? .distantPast) {
+                account.fiveHour = swap.fiveHour
+                account.sevenDay = swap.sevenDay
+                account.limitsObservedAt = fetched
+            }
+            accounts[key] = account
+        }
+        return accounts.values
+            .map { $0.current(at: now) }
+            .sorted { lhs, rhs in
+                lhs.isActive != rhs.isActive ? lhs.isActive : lhs.identity.displayName.localizedCaseInsensitiveCompare(rhs.identity.displayName) == .orderedAscending
+            }
+    }
+}
