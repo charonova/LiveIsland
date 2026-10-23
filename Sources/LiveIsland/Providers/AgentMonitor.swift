@@ -239,7 +239,8 @@ private final class Worker: @unchecked Sendable {
         let lines = Self.lastLines(of: url.path)
         let tail = CodexRollout.tail(of: lines)
         for line in lines.reversed() {
-            if let limits = CodexRollout.limits(in: line) {
+            if var limits = CodexRollout.limits(in: line) {
+                limits.session = url.path
                 if codexLimits == nil || limits.observedAt >= codexLimits!.observedAt { codexLimits = limits }
                 break
             }
