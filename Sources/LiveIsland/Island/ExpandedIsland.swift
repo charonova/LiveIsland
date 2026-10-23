@@ -287,11 +287,9 @@ private struct MediaPage: View {
                                     .foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                             }
                             Spacer(minLength: 0)
-                            Image(systemName: "waveform")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(accent)
-                                .symbolEffect(.variableColor.iterative.reversing, isActive: track.isPlaying)
-                                .opacity(track.isPlaying ? 1 : 0.35)
+                            Waveform(meter: model.levels, style: .large, color: accent, playing: track.isPlaying)
+                                .opacity(track.isPlaying ? 1 : 0.45)
+                                .padding(.top, 2)
                         }
                         Spacer(minLength: 8)
                         TimelineView(.periodic(from: .now, by: 1)) { context in

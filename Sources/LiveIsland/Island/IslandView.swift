@@ -183,9 +183,8 @@ struct CompactIsland: View {
         case .microphoneOn(let app):
             Text(app).foregroundStyle(.orange)
         case .nowPlaying(_, let playing):
-            Image(systemName: "waveform")
-                .foregroundStyle(model.artwork(for: model.compactPlayer)?.accent ?? .pink)
-                .symbolEffect(.variableColor.iterative.reversing, isActive: playing)
+            Waveform(meter: model.levels, style: .compact,
+                     color: model.artwork(for: model.compactPlayer)?.accent ?? .pink, playing: playing)
         }
     }
 }

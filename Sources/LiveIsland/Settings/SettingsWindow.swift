@@ -267,6 +267,14 @@ private struct MediaSettingsPage: View {
             } header: {
                 Text("Players")
             }
+            Section {
+                ToggleRow(symbol: "waveform", tint: .pink, title: "Live waveform",
+                          detail: "Bars that move with the music you're playing", isOn: $model.liveWaveform)
+                Text("macOS asks once for permission to record system audio. LiveIsland only measures how loud each part of the sound is while music plays; it never records or stores it. Without permission, the island shows the animated symbol.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            } header: {
+                Text("Waveform")
+            }
             Section("Playing now") {
                 if model.players.isEmpty {
                     Text("Nothing is playing").foregroundStyle(.secondary)

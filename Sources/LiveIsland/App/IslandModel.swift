@@ -41,9 +41,13 @@ struct ArtworkLook {
 final class IslandModel: ObservableObject {
     // Live data
     /// The app the system's media controls point at (any app: browsers, Music, Spotify, …).
-    @Published private(set) var systemPlayer: NowPlaying?
+    @Published private(set) var systemPlayer: NowPlaying? {
+        didSet { levels.isPlaying = players.contains(where: \.isPlaying) }
+    }
     /// Spotify and Music, read directly, so they show even when another app has the controls.
-    @Published private(set) var scriptedPlayers: [NowPlaying] = []
+    @Published private(set) var scriptedPlayers: [NowPlaying] = [] {
+        didSet { levels.isPlaying = players.contains(where: \.isPlaying) }
+    }
     /// The player picked in the island; nil follows whatever is playing.
     @Published var selectedPlayerID: String?
     @Published private(set) var output: OutputVolume.State?
@@ -90,6 +94,13 @@ final class IslandModel: ObservableObject {
     @Published var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
     @Published var ambientGlow: Bool { didSet { save(ambientGlow, Key.glow) } }
     @Published var agentSounds: Bool { didSet { save(agentSounds, Key.sounds) } }
+    /// Bars that move with the real sound, instead of the animated symbol.
+    @Published var liveWaveform: Bool {
+        didSet {
+            save(liveWaveform, Key.waveform)
+            levels.isEnabled = liveWaveform
+        }
+    }
     /// How LiveIsland switches Claude accounts, if at all. Off until the user picks one.
     @Published var accountSwitching: AccountsMonitor.Switching {
         didSet {
@@ -114,6 +125,7 @@ final class IslandModel: ObservableObject {
 
     let media = NowPlayingProvider()
     let volume = OutputVolume()
+    let levels = AudioLevelMeter()
     private let accountsMonitor = AccountsMonitor()
     private let scripted = ScriptedPlayers()
     private let agentMonitor = AgentMonitor()
@@ -130,7 +142,8 @@ final class IslandModel: ObservableObject {
     init() {
         defaults.register(defaults: [Key.media: true, Key.agents: true, Key.calls: true, Key.devices: true,
                                      Key.calendar: true, Key.claude: true, Key.codex: true, Key.hover: true,
-                                     Key.hoverDelay: 0.12, Key.glow: true, Key.sounds: false, Key.players: true])
+                                     Key.hoverDelay: 0.12, Key.glow: true, Key.sounds: false, Key.players: true,
+                                     Key.waveform: true])
         showMedia = defaults.bool(forKey: Key.media)
         showAgents = defaults.bool(forKey: Key.agents)
         showCalls = defaults.bool(forKey: Key.calls)
@@ -142,6 +155,7 @@ final class IslandModel: ObservableObject {
         hoverDelay = defaults.double(forKey: Key.hoverDelay)
         ambientGlow = defaults.bool(forKey: Key.glow)
         agentSounds = defaults.bool(forKey: Key.sounds)
+        liveWaveform = defaults.bool(forKey: Key.waveform)
         controlPlayers = defaults.bool(forKey: Key.players)
         accountSwitching = defaults.string(forKey: Key.switching).flatMap(AccountsMonitor.Switching.init(rawValue:)) ?? .off
         codexSwitching = defaults.bool(forKey: Key.codexSwitching)
@@ -158,6 +172,7 @@ final class IslandModel: ObservableObject {
         calendar.onUpdate = { [weak self] in self?.events = $0 }
         media.start()
         volume.start()
+        levels.isEnabled = liveWaveform
         accountsMonitor.onUpdate = { [weak self] in self?.accountsState = $0 }
         accountsMonitor.mode = accountSwitching
         accountsMonitor.codexSwitching = codexSwitching
@@ -174,6 +189,7 @@ final class IslandModel: ObservableObject {
     func stop() {
         media.stop()
         volume.stop()
+        levels.stop()
         accountsMonitor.stop()
         scripted.stop()
         agentMonitor.stop()
@@ -576,6 +592,7 @@ final class IslandModel: ObservableObject {
         static let glow = "ambientGlow"
         static let sounds = "agentSounds"
         static let players = "controlPlayers"
+        static let waveform = "liveWaveform"
         static let switching = "accountSwitching"
         static let codexSwitching = "codexSwitching"
     }

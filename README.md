@@ -9,7 +9,7 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-65%20passing-success)
+![Tests](https://img.shields.io/badge/tests-73%20passing-success)
 
 <br>
 
@@ -59,7 +59,8 @@
 **Now Playing**
 - Works with any app that plays audio or video: Spotify, Music, browsers, podcasts…
 - Reads **Spotify and Music directly** too, so a paused Spotify stays one tap away while a video plays in the browser. Switch players from the island
-- Artwork with a **glow in the cover's colors**, live waveform, drag to scrub, ±15 s, previous / play / next
+- Artwork with a **glow in the cover's colors**, drag to scrub, ±15 s, previous / play / next
+- A **real waveform** that moves with the music: bass pulses in the middle, treble at the edges, in the cover's colors (macOS 14.2+)
 - **Up Next** from Music's playlist, and **Recently Played** for Spotify and Music: tap a track to play it again
 - System volume and output device right under the player
 - Music or Spotify not open? Their icons are there; tap to open and play
@@ -139,6 +140,7 @@ LiveIsland learns a Claude account's limits from the status line while you use i
 | Claude accounts | Who's logged in from `~/.claude.json`; logins (only when you choose LiveIsland switching) through the system `security` tool, the way Claude Code itself stores them |
 | Codex accounts | Who's logged in, and the plan, from `~/.codex/auth.json`; limits from the `rate_limits` Codex writes in each session; logins (only when you turn on Codex switching) as private copies of that file in `~/Library/Application Support/LiveIsland` |
 | Microphone, camera, calls | Core Audio's process list and CoreMediaIO. Only *whether* they're in use, never what they hear or see |
+| Waveform | A Core Audio process tap on what the Mac plays (macOS 14.2+), only while music plays and the bars are on screen. It only listens: the sound is never changed, muted, recorded or stored, just measured band by band |
 | Battery, AirPods | IOKit power notifications; IOBluetooth and `system_profiler` for AirPods levels |
 | Calendar | EventKit, read only |
 
@@ -168,6 +170,7 @@ You need the Xcode Command Line Tools and CMake (`brew install cmake`), which bu
 - **Calendar**, for your next events
 - **Bluetooth**, for AirPods battery
 - **Automation** for Spotify and Music (now playing and controls), and for Terminal or iTerm2 the first time you jump to a session there
+- **System audio recording**, for the live waveform, the first time music plays. Without it the island shows the animated symbol; you can turn the waveform off in Settings › Media
 - Nothing for Claude or Codex accounts: switching is off until you turn it on, the Keychain items it uses are written by the system `security` tool, and Codex logins are plain files in LiveIsland's own folder
 
 Everything works without any of them; the matching feature just stays empty.
@@ -179,7 +182,7 @@ Everything works without any of them; the matching feature just stays empty.
 LIVEISLAND_REAL_DATA=1 ./scripts/test.sh -c release --filter RealData   # read your own transcripts, timed
 ```
 
-The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, activity priorities, timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
+The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
 
 ## Automation
 
@@ -192,7 +195,7 @@ The tests cover the transcript and rollout parsers, the incremental usage ledger
 
 ## Privacy
 
-LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. Its only network request downloads Spotify's cover art, from the address Spotify itself gives.
+LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. The waveform measures the sound in memory and never records or keeps it. Its only network request downloads Spotify's cover art, from the address Spotify itself gives.
 
 ## Credits
 

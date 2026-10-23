@@ -43,6 +43,8 @@
 	<string>LiveIsland shows your AirPods and headphones, with their battery, when they connect.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>LiveIsland shows and controls what Spotify and Music are playing, and brings an AI session's terminal tab forward when you ask.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>LiveIsland moves its waveform to the music you play. It only measures how loud the sound is, and never records or stores it.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>LiveIsland shows your next calendar event and reminds you before it starts.</string>
 	<key>NSHighResolutionCapable</key>
