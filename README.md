@@ -9,7 +9,7 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-59%20passing-success)
+![Tests](https://img.shields.io/badge/tests-65%20passing-success)
 
 <br>
 
@@ -93,26 +93,28 @@ Prefer to do it yourself? The lines are in [`scripts/claude-statusline-snippet.s
 
 ## Claude and Codex accounts
 
-<div align="center">
-<a href="demo/accounts.mp4"><img src="demo/accounts.gif" width="720" alt="The Accounts tab: three Claude accounts with their 5-hour and weekly limits, switching from one to another"></a>
-</div>
-
 <table>
   <tr>
-    <td align="center" width="62%">
-      <img src="demo/island-accounts.png" alt="Accounts tab: each account with its plan, 5-hour and weekly bars, reset times, and Switch buttons; the one with the most room is starred"><br>
-      <sub><b>Accounts</b><br>Every account's limits; ★ marks the one with the most room</sub>
+    <td align="center" width="50%">
+      <img src="demo/island-accounts.png" alt="Accounts tab on Claude Code: three accounts with their plan, 5-hour and weekly bars, reset times, and Switch buttons; the one with the most room is starred"><br>
+      <sub><b>Claude Code</b><br>Every account's limits; ★ marks the one with the most room</sub>
     </td>
-    <td align="center" width="38%">
-      <img src="demo/menu-bar-accounts.jpg" alt="Menu bar panel with the account in use, its limits, and a Switch menu listing the other accounts"><br>
+    <td align="center" width="50%">
+      <img src="demo/island-accounts-codex.png" alt="Accounts tab on Codex: the ChatGPT account in use, its Pro Lite plan and its weekly limit"><br>
+      <sub><b>Codex</b><br>ChatGPT logins, with their plan and limits</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="demo/menu-bar-accounts.jpg" width="300" alt="Menu bar panel with the account in use, its limits, and a Switch menu listing the other accounts"><br>
       <sub><b>Menu bar</b><br>Switch without opening the island</sub>
     </td>
   </tr>
 </table>
 
-Use more than one Claude account? The **Accounts** tab lists every account Claude Code has used on this Mac, with its plan and its 5-hour and weekly limits. When the account in use runs out, the notch says so and points to the one with the most room. LiveIsland never switches on its own: you tap **Switch**.
+Use more than one account? The **Accounts** tab lists every account Claude Code and Codex have used on this Mac, with its plan and its 5-hour and weekly limits; a Claude Code | Codex switch at the top picks the list. When the account in use runs out, the notch says so and points to the one with the most room. LiveIsland never switches on its own: you tap **Switch**.
 
-Choose how switching works in **Settings › AI Agents**:
+Choose how Claude accounts switch in **Settings › AI Agents**:
 
 | | |
 |---|---|
@@ -124,7 +126,7 @@ To add an account, run `/login` in Claude Code and sign in to it (a private brow
 
 **Codex accounts** work the same way: the Accounts page has a Claude Code | Codex switch, and **Settings › AI Agents** has *Switch Codex accounts with LiveIsland* (off by default). LiveIsland then keeps a copy of each Codex login in its own folder, readable only by you, the same way Codex keeps its own in `~/.codex/auth.json`, and puts it in place when you tap Switch. Codex refuses to save a refreshed login over another account's, so a running session can't undo a switch. Add accounts with `codex login`; avoid `codex logout`, which cancels the login.
 
-LiveIsland learns an account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request. Each report names the session it came from, and a session keeps the login it started with, so numbers land on an account only when that's certain: the session started after the latest switch, or the numbers match that account's own reset times. An account you aren't using keeps its last numbers, and a window that has reset counts from zero. (Added the status line lines with an earlier version? Settings › AI Agents offers to update them.)
+LiveIsland learns a Claude account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request; a Codex account's come from the limits Codex writes in each session. Each report names the session it came from, and a session keeps the login it started with, so numbers land on an account only when that's certain: the session started after the latest switch, or the numbers match that account's own reset times. An account you aren't using keeps its last numbers, and a window that has reset counts from zero. (Added the status line lines with an earlier version? Settings › AI Agents offers to update them.)
 
 ## How it works
 
@@ -135,7 +137,7 @@ LiveIsland learns an account's limits from the status line while you use it, and
 | Claude Code and Codex | Their session files (`~/.claude/projects`, `~/.codex/sessions`), watched with FSEvents. Transcripts can be gigabytes, so only new bytes are read |
 | Where a session runs | The process table: each agent's folder and terminal, and the app above it |
 | Claude accounts | Who's logged in from `~/.claude.json`; logins (only when you choose LiveIsland switching) through the system `security` tool, the way Claude Code itself stores them |
-| Codex accounts | Who's logged in, and the plan, from `~/.codex/auth.json`; limits from the `rate_limits` Codex writes in each session |
+| Codex accounts | Who's logged in, and the plan, from `~/.codex/auth.json`; limits from the `rate_limits` Codex writes in each session; logins (only when you turn on Codex switching) as private copies of that file in `~/Library/Application Support/LiveIsland` |
 | Microphone, camera, calls | Core Audio's process list and CoreMediaIO. Only *whether* they're in use, never what they hear or see |
 | Battery, AirPods | IOKit power notifications; IOBluetooth and `system_profiler` for AirPods levels |
 | Calendar | EventKit, read only |
@@ -166,7 +168,7 @@ You need the Xcode Command Line Tools and CMake (`brew install cmake`), which bu
 - **Calendar**, for your next events
 - **Bluetooth**, for AirPods battery
 - **Automation** for Spotify and Music (now playing and controls), and for Terminal or iTerm2 the first time you jump to a session there
-- Nothing for Claude accounts: switching is off until you turn it on, and the Keychain items it uses are written by the system `security` tool
+- Nothing for Claude or Codex accounts: switching is off until you turn it on, the Keychain items it uses are written by the system `security` tool, and Codex logins are plain files in LiveIsland's own folder
 
 Everything works without any of them; the matching feature just stays empty.
 
@@ -177,14 +179,14 @@ Everything works without any of them; the matching feature just stays empty.
 LIVEISLAND_REAL_DATA=1 ./scripts/test.sh -c release --filter RealData   # read your own transcripts, timed
 ```
 
-The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, activity priorities, timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output.
+The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, activity priorities, timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
 
 ## Automation
 
 | Link | Action |
 |---|---|
 | `liveisland://open` · `close` | Open or close the island |
-| `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity` or `accounts` |
+| `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity` or `accounts` (`accounts/codex` for the Codex list) |
 | `liveisland://timer/5` | Start a 5-minute timer |
 | `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `about` |
 

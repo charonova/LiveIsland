@@ -71,8 +71,11 @@ ffmpeg -ss 58.5 -i recording.mov -frames:v 1 -vf "crop=1260:620:1418:0" -q:v 3 d
 Screenshots of the running app don't need a recording. Open each page with a link and capture only LiveIsland's window, which keeps its transparency (find the window number with `CGWindowListCopyWindowInfo`, owner "LiveIsland"). Capture within a second of opening: the island closes when the pointer passes over it and leaves. Then crop to the island and blur emails (the Accounts tab, and the account name on Agents):
 
 ```bash
-open "liveisland://open/accounts"; sleep 0.8; screencapture -x -o -l<window> accounts.png
-ffmpeg -i accounts.png -vf "crop=1300:640:110:0" demo/island-accounts.png
+open "liveisland://open/accounts"; sleep 0.8; screencapture -x -o -l<window> accounts.png   # accounts/codex for the Codex list
+ffmpeg -i accounts.png -vf "crop=1300:640:110:0" cropped.png
+B="boxblur=luma_radius=14:luma_power=4:chroma_radius=14:chroma_power=4"   # radius < half the band's height
+ffmpeg -i cropped.png -filter_complex "[0:v]format=gbrap,split[base][a];[a]crop=280:36:138:266,${B}[e];\
+[base][e]overlay=138:266,format=rgba" demo/island-accounts.png   # one band per email row (108 px apart); ${B}, not $B[..] in zsh
 ```
 
 Blur email addresses before anything leaves the Mac (the Accounts tab and Settings show them). Blur each email line while the tab is open, and the whole name column while rows re-sort after a switch, so no address slides past mid-animation; find those moments with `select='gt(scene,0.05)'` on the column. Then check the column frame by frame:
