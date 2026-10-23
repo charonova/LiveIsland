@@ -80,17 +80,59 @@ struct CompactIsland: View {
     let layout: IslandLayout
 
     var body: some View {
+        let split = sharesWithMusic
         HStack(spacing: 0) {
-            leading
-                .frame(width: IslandLayout.wingWidth - 14, height: layout.notch.height, alignment: .leading)
-                .padding(.leading, 14)
+            Group {
+                if split {
+                    HStack(spacing: 7) {
+                        leading
+                        status.minimumScaleFactor(0.7)
+                    }
+                    .transition(.blurReplace.combined(with: .opacity))
+                } else {
+                    leading
+                }
+            }
+            .frame(width: IslandLayout.wingWidth - 14, height: layout.notch.height, alignment: .leading)
+            .padding(.leading, 14)
             Spacer(minLength: layout.notch.width)
-            trailing
-                .frame(width: IslandLayout.wingWidth - 14, height: layout.notch.height, alignment: .trailing)
-                .padding(.trailing, 14)
+            Group {
+                if split {
+                    Waveform(meter: model.levels, style: .compact,
+                             color: model.artwork(for: model.compactPlayer)?.accent ?? .pink, playing: true)
+                        .transition(.blurReplace.combined(with: .opacity))
+                } else {
+                    trailing
+                }
+            }
+            .frame(width: IslandLayout.wingWidth - 14, height: layout.notch.height, alignment: .trailing)
+            .padding(.trailing, 14)
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
         .lineLimit(1)
+        .animation(.spring(response: 0.42, dampingFraction: 0.8), value: split)
+    }
+
+    /// Music playing behind an agent or a timer: like the iPhone's island with two things going
+    /// on, the activity takes the left wing and the music's waveform the right one.
+    private var sharesWithMusic: Bool {
+        guard model.musicPlaying else { return false }
+        switch activity {
+        case .agentWorking, .agentDone, .agentNeedsYou, .timer: return true
+        default: return false
+        }
+    }
+
+    /// The activity's detail, short enough to sit beside its icon in the left wing.
+    @ViewBuilder private var status: some View {
+        switch activity {
+        case .agentDone:
+            Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).foregroundStyle(.green)
+        case .agentNeedsYou:
+            Image(systemName: "hand.raised.fill").foregroundStyle(.yellow).symbolEffect(.pulse)
+        default:
+            trailing
+        }
     }
 
     /// Changes in detail (a clock ticking) keep the identity; a different activity animates in.

@@ -439,6 +439,11 @@ final class IslandModel: ObservableObject {
         return activity
     }
 
+    /// Music playing that the island may show beside another activity.
+    var musicPlaying: Bool {
+        showMedia && players.contains(where: \.isPlaying)
+    }
+
     /// The track the compact island shows: whichever is playing.
     var compactPlayer: NowPlaying? {
         players.first(where: \.isPlaying) ?? nowPlaying
