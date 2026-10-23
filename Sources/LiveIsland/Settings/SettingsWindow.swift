@@ -321,6 +321,7 @@ private struct AgentsSettingsPage: View {
                           detail: "When an agent finishes, or stops to ask you something", isOn: $model.agentSounds)
             }
             AccountsSettingsSection()
+            CodexAccountsSettingsSection()
             Section {
                 if ClaudeStatusLine.needsUpdate {
                     VStack(alignment: .leading, spacing: 8) {
@@ -502,6 +503,57 @@ private struct AccountsSettingsSection: View {
         case .liveIsland: return "Login saved"
         case .claudeSwap: return "In claude-swap"
         case nil: return model.accountSwitching == .off ? "" : "Not saved yet"
+        }
+    }
+}
+
+/// Codex accounts: whether LiveIsland keeps their logins to switch, and the ones it knows.
+private struct CodexAccountsSettingsSection: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        Section {
+            Toggle(isOn: $model.codexSwitching) {
+                HStack(spacing: 10) {
+                    AgentAvatar(kind: .codex, state: .idle, size: 26)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Switch Codex accounts with LiveIsland")
+                        Text("Only when you tap Switch, never on its own").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .toggleStyle(.switch)
+            Text(model.codexSwitching
+                 ? "LiveIsland keeps a copy of each Codex login in its own folder, readable only by you, the same way Codex keeps its own in ~/.codex/auth.json, and puts it in place when you tap Switch."
+                 : "LiveIsland shows each Codex account you use and its limits. Switching stays with you (codex login).")
+                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            ForEach(model.codexAccounts) { account in
+                HStack(spacing: 10) {
+                    AccountAvatar(identity: account.identity, size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(account.identity.email)
+                            if account.isActive { Text("In use").font(.system(size: 10, weight: .semibold)).foregroundStyle(.green) }
+                        }
+                        Text(account.identity.plan.map { "ChatGPT \($0)" } ?? "ChatGPT").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(account.switcher != nil ? "Login saved" : (model.codexSwitching ? "Not saved yet" : ""))
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    if account.switcher != nil || !account.isActive {
+                        Button("Forget") { model.forgetAccount(account) }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Add an account: run codex login and sign in to it. Don't use codex logout: it cancels the login.",
+                      systemImage: "person.badge.plus")
+                Label("New Codex sessions use the new account. Sessions already running keep theirs until you restart them (codex resume picks up where you left off).",
+                      systemImage: "clock")
+            }
+            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        } header: {
+            Text("Codex accounts")
         }
     }
 }

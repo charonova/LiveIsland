@@ -209,13 +209,23 @@ private struct AccountStrip: View {
                 }
                 Spacer(minLength: 4)
                 let others = model.accounts.filter { !$0.isActive && $0.switcher != nil && !$0.needsLogin }
+                let codex = model.codexAccounts.filter { !$0.isActive && $0.switcher != nil }
                 if model.accountsState.switching != nil {
                     ProgressView().controlSize(.small)
-                } else if !others.isEmpty {
+                } else if !others.isEmpty || !codex.isEmpty {
                     Menu("Switch") {
-                        ForEach(others) { account in
-                            Button("\(account.identity.displayName) — \(account.used.map { "\(Int($0.rounded()))% used" } ?? "not seen yet")") {
-                                model.switchAccount(account)
+                        if !others.isEmpty {
+                            Section("Claude Code") {
+                                ForEach(others) { account in
+                                    Button("\(account.identity.displayName) — \(usage(account))") { model.switchAccount(account) }
+                                }
+                            }
+                        }
+                        if !codex.isEmpty {
+                            Section("Codex") {
+                                ForEach(codex) { account in
+                                    Button("\(account.identity.email) — \(usage(account))") { model.switchAccount(account) }
+                                }
                             }
                         }
                     }
@@ -231,6 +241,10 @@ private struct AccountStrip: View {
         .padding(10)
         .frame(height: 50)
         .liquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func usage(_ account: ClaudeAccount) -> String {
+        account.used.map { "\(Int($0.rounded()))% used" } ?? "not seen yet"
     }
 
     private func limits(_ account: ClaudeAccount) -> String {
