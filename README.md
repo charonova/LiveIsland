@@ -9,7 +9,7 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-57%20passing-success)
+![Tests](https://img.shields.io/badge/tests-59%20passing-success)
 
 <br>
 
@@ -26,15 +26,15 @@
 <table>
   <tr>
     <td align="center" width="33%">
-      <img src="demo/island-media.jpg" alt="Media page: Spotify track with artwork glow, scrubber, controls, volume and Recently Played"><br>
+      <img src="demo/island-media.png" alt="Media page: Spotify track with artwork glow, scrubber, controls, volume and Recently Played"><br>
       <sub><b>Media</b><br>Any player, glow from the cover, Up Next</sub>
     </td>
     <td align="center" width="33%">
-      <img src="demo/island-agents.jpg" alt="Agents page: Claude Code sessions with states, and rings for the 5-hour and weekly limits of Claude Code and Codex"><br>
+      <img src="demo/island-agents.png" alt="Agents page: Claude Code sessions with states, and rings for the 5-hour and weekly limits of Claude Code and Codex"><br>
       <sub><b>Agents</b><br>Sessions, states, real usage limits</sub>
     </td>
     <td align="center" width="33%">
-      <img src="demo/island-activity.jpg" alt="Activity page: timer presets, calendar, battery, AirPods, microphone and camera tiles"><br>
+      <img src="demo/island-activity.png" alt="Activity page: timer presets, calendar, battery, AirPods, microphone and camera tiles"><br>
       <sub><b>Activity</b><br>Timer, calendar, battery, devices, privacy</sub>
     </td>
   </tr>
@@ -48,7 +48,7 @@
       <sub><b>Menu bar</b><br>Mini player and quick switches</sub>
     </td>
     <td align="center">
-      <img src="demo/settings-agents.jpg" alt="Settings window, AI Agents page: agent toggles, sound, and Claude Code's 5-hour and weekly limits"><br>
+      <img src="demo/settings-agents.png" alt="Settings window, AI Agents page: agent toggles, sound, and how to switch Claude accounts"><br>
       <sub><b>Settings</b><br>Everything, in one window</sub>
     </td>
   </tr>
@@ -100,7 +100,7 @@ Prefer to do it yourself? The lines are in [`scripts/claude-statusline-snippet.s
 <table>
   <tr>
     <td align="center" width="62%">
-      <img src="demo/island-accounts.jpg" alt="Accounts tab: each account with its plan, 5-hour and weekly bars, reset times, and Switch buttons; the one with the most room is starred"><br>
+      <img src="demo/island-accounts.png" alt="Accounts tab: each account with its plan, 5-hour and weekly bars, reset times, and Switch buttons; the one with the most room is starred"><br>
       <sub><b>Accounts</b><br>Every account's limits; ★ marks the one with the most room</sub>
     </td>
     <td align="center" width="38%">
@@ -117,12 +117,12 @@ Choose how switching works in **Settings › AI Agents**:
 | | |
 |---|---|
 | **Off** (default) | Limits and alerts only. You switch with `/login` in Claude Code. |
-| **LiveIsland** | LiveIsland keeps a copy of each account's login in your login Keychain and puts it in place when you tap Switch. Only the Claude login changes: your MCP server logins stay as they are. It holds Claude Code's own locks while it switches, so a login refresh can't collide with it, and running sessions move to the new account within about 30 seconds. |
+| **LiveIsland** | LiveIsland keeps a copy of each account's login in your login Keychain and puts it in place when you tap Switch. Only the Claude login changes: your MCP server logins stay as they are. It holds Claude Code's own locks while it switches, so a login refresh can't collide with it. New Claude Code sessions use the new account; sessions already running can keep the previous one until you restart them (`claude --continue` picks up where you left off). |
 | **claude-swap** | LiveIsland asks [claude-swap](https://github.com/realiti4/claude-swap) to switch and shows its live usage for every account. LiveIsland itself never touches a login. |
 
 To add an account, run `/login` in Claude Code and sign in to it (a private browser window helps if you're signed in to claude.ai as someone else). Avoid `/logout`: it can cancel the saved login of the account you leave. Use one switcher at a time, since each keeps its own copy of every login.
 
-LiveIsland learns an account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request. An account you aren't using keeps its last numbers, and a window that has reset counts from zero.
+LiveIsland learns an account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request. Each report names the session it came from, and a session keeps the login it started with, so numbers land on an account only when that's certain: the session started after the latest switch, or the numbers match that account's own reset times. An account you aren't using keeps its last numbers, and a window that has reset counts from zero. (Added the status line lines with an earlier version? Settings › AI Agents offers to update them.)
 
 ## How it works
 
@@ -181,8 +181,9 @@ The tests cover the transcript and rollout parsers, the incremental usage ledger
 | Link | Action |
 |---|---|
 | `liveisland://open` · `close` | Open or close the island |
+| `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity` or `accounts` |
 | `liveisland://timer/5` | Start a 5-minute timer |
-| `liveisland://settings` | Open Settings |
+| `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `about` |
 
 ## Privacy
 
