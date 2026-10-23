@@ -3,7 +3,7 @@ import LiveIslandCore
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, island, media, agents, about
+    case general, island, media, agents, updates, about
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return "Island"
         case .media: return "Media"
         case .agents: return "AI Agents"
+        case .updates: return "Software Update"
         case .about: return "About"
         }
     }
@@ -23,6 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return "capsule.fill"
         case .media: return "music.note"
         case .agents: return "sparkles"
+        case .updates: return "arrow.triangle.2.circlepath"
         case .about: return "info"
         }
     }
@@ -33,6 +35,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return .indigo
         case .media: return .pink
         case .agents: return .orange
+        case .updates: return .teal
         case .about: return .blue
         }
     }
@@ -81,7 +84,13 @@ struct SettingsView: View {
             List(selection: $navigation.section) {
                 ForEach(SettingsSection.allCases) { section in
                     Label {
-                        Text(section.title)
+                        HStack {
+                            Text(section.title)
+                            if section == .updates {
+                                Spacer()
+                                UpdateBadge(updater: model.updater)
+                            }
+                        }
                     } icon: {
                         IconBadge(symbol: section.symbol, tint: section.tint, size: 22)
                     }
@@ -98,6 +107,7 @@ struct SettingsView: View {
                 case .island: IslandPage()
                 case .media: MediaSettingsPage()
                 case .agents: AgentsSettingsPage()
+                case .updates: SoftwareUpdatePage(updater: model.updater)
                 case .about: AboutPage()
                 }
             }
@@ -467,6 +477,7 @@ private struct AboutPage: View {
             VStack(spacing: 4) {
                 Text("LiveIsland").font(.system(size: 30, weight: .bold))
                 Text("Version \(version)").foregroundStyle(.secondary)
+                AboutUpdateLine(updater: model.updater)
             }
             Text("Now playing, AI agents, calls, AirPods, timers and your calendar, living in the notch.")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 380)
@@ -484,6 +495,120 @@ private struct AboutPage: View {
             .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Software Update, like the one in System Settings: the version running, whether a newer
+/// one is out and what's in it, and the button that installs it.
+private struct SoftwareUpdatePage: View {
+    @EnvironmentObject private var model: IslandModel
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        Form {
+            Section { PageHeader(section: .updates, detail: "New versions of LiveIsland, from its releases on GitHub.") }
+            Section {
+                status
+                if let release = updater.availableRelease {
+                    if !release.notes.isEmpty {
+                        Text(notes(release.notes)).font(.system(size: 12)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack {
+                        Button("Update Now") { Task { await updater.install() } }.glassButton(prominent: true)
+                        Link("Release Notes", destination: release.page).font(.system(size: 12))
+                        Spacer()
+                        if release.size > 0 {
+                            Text(ByteCountFormatter.string(fromByteCount: Int64(release.size), countStyle: .file))
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            Section {
+                ToggleRow(symbol: "clock.arrow.circlepath", tint: .teal, title: "Check for updates automatically",
+                          detail: "Once a day, LiveIsland asks GitHub whether a newer version is out. It never installs one without you.",
+                          isOn: $model.checkForUpdates)
+                Text("Updating replaces LiveIsland where it is and opens the new version. Until LiveIsland is notarized by Apple, macOS may ask again for the permissions it uses.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder private var status: some View {
+        HStack(spacing: 12) {
+            switch updater.state {
+            case .checking:
+                ProgressView().controlSize(.small).frame(width: 28)
+                Text("Checking for updates…")
+            case .downloading(let release):
+                ProgressView().controlSize(.small).frame(width: 28)
+                Text("Downloading LiveIsland \(release.version.description)…")
+            case .installing(let release):
+                ProgressView().controlSize(.small).frame(width: 28)
+                Text("Installing LiveIsland \(release.version.description). It reopens in a moment.")
+            case .available(let release):
+                Image(systemName: "arrow.down.circle.fill").font(.system(size: 24)).foregroundStyle(.teal).frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LiveIsland \(release.version.description) is available").font(.system(size: 13, weight: .semibold))
+                    Text("You have version \(updater.currentVersion)").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            case .failed(let message):
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 22)).foregroundStyle(.orange).frame(width: 28)
+                Text(message).fixedSize(horizontal: false, vertical: true)
+            case .upToDate, .idle:
+                Image(systemName: updater.state == .upToDate ? "checkmark.seal.fill" : "app.badge")
+                    .font(.system(size: 22)).foregroundStyle(updater.state == .upToDate ? .green : .secondary).frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(updater.state == .upToDate ? "LiveIsland is up to date" : "LiveIsland \(updater.currentVersion)")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(checkedLine).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if updater.availableRelease == nil {
+                Button("Check Now") { Task { await updater.check() } }
+                    .disabled(updater.isBusy)
+            }
+        }
+    }
+
+    private var checkedLine: String {
+        guard let checked = updater.lastChecked else { return "Version \(updater.currentVersion)" }
+        let ago = Date().timeIntervalSince(checked) < 60 ? "just now" : RelativeDateTimeFormatter().localizedString(for: checked, relativeTo: Date())
+        return "Version \(updater.currentVersion) · checked \(ago)"
+    }
+
+    /// The release notes' Markdown, shown with its bold and code; lines stay lines.
+    private func notes(_ markdown: String) -> AttributedString {
+        (try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(markdown)
+    }
+}
+
+/// A count in the sidebar, like System Settings' Software Update, when a new version is out.
+private struct UpdateBadge: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        if updater.availableRelease != nil {
+            Text("1").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                .padding(.horizontal, 6).padding(.vertical, 1)
+                .background(Capsule().fill(.red))
+        }
+    }
+}
+
+/// Under the version on About: a way to the update, when there is one.
+private struct AboutUpdateLine: View {
+    @EnvironmentObject private var model: IslandModel
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        if let release = updater.availableRelease {
+            Button("Version \(release.version.description) is available") { model.openSettings(.updates) }
+                .buttonStyle(.link).font(.system(size: 12))
+        }
     }
 }
 

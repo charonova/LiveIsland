@@ -94,6 +94,13 @@ final class IslandModel: ObservableObject {
     @Published var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
     @Published var ambientGlow: Bool { didSet { save(ambientGlow, Key.glow) } }
     @Published var agentSounds: Bool { didSet { save(agentSounds, Key.sounds) } }
+    /// Whether LiveIsland asks GitHub once a day for a newer version (it never installs on its own).
+    @Published var checkForUpdates: Bool {
+        didSet {
+            save(checkForUpdates, Key.updates)
+            updater.checksAutomatically = checkForUpdates
+        }
+    }
     /// The order of the island's tabs, picked in Settings › Island.
     @Published var tabOrder: [IslandTab] {
         didSet { defaults.set(tabOrder.map(\.rawValue), forKey: Key.tabOrder) }
@@ -103,6 +110,8 @@ final class IslandModel: ObservableObject {
         didSet {
             save(liveWaveform, Key.waveform)
             levels.isEnabled = liveWaveform
+        updater.checksAutomatically = checkForUpdates
+        updater.start()
         }
     }
     /// How LiveIsland switches Claude accounts, if at all. Off until the user picks one.
@@ -130,6 +139,7 @@ final class IslandModel: ObservableObject {
     let media = NowPlayingProvider()
     let volume = OutputVolume()
     let levels = AudioLevelMeter()
+    let updater = Updater()
     private let accountsMonitor = AccountsMonitor()
     private let scripted = ScriptedPlayers()
     private let agentMonitor = AgentMonitor()
@@ -147,7 +157,7 @@ final class IslandModel: ObservableObject {
         defaults.register(defaults: [Key.media: true, Key.agents: true, Key.calls: true, Key.devices: true,
                                      Key.calendar: true, Key.claude: true, Key.codex: true, Key.hover: true,
                                      Key.hoverDelay: 0.12, Key.glow: true, Key.sounds: false, Key.players: true,
-                                     Key.waveform: true])
+                                     Key.waveform: true, Key.updates: true])
         showMedia = defaults.bool(forKey: Key.media)
         showAgents = defaults.bool(forKey: Key.agents)
         showCalls = defaults.bool(forKey: Key.calls)
@@ -160,6 +170,7 @@ final class IslandModel: ObservableObject {
         ambientGlow = defaults.bool(forKey: Key.glow)
         agentSounds = defaults.bool(forKey: Key.sounds)
         liveWaveform = defaults.bool(forKey: Key.waveform)
+        checkForUpdates = defaults.bool(forKey: Key.updates)
         tabOrder = Ordering.restore(defaults.stringArray(forKey: Key.tabOrder) ?? [], all: IslandTab.allCases, name: \.rawValue)
         controlPlayers = defaults.bool(forKey: Key.players)
         accountSwitching = defaults.string(forKey: Key.switching).flatMap(AccountsMonitor.Switching.init(rawValue:)) ?? .off
@@ -195,6 +206,7 @@ final class IslandModel: ObservableObject {
         media.stop()
         volume.stop()
         levels.stop()
+        updater.stop()
         accountsMonitor.stop()
         scripted.stop()
         agentMonitor.stop()
@@ -625,6 +637,7 @@ final class IslandModel: ObservableObject {
         static let players = "controlPlayers"
         static let waveform = "liveWaveform"
         static let tabOrder = "tabOrder"
+        static let updates = "checkForUpdates"
         static let switching = "accountSwitching"
         static let codexSwitching = "codexSwitching"
     }
