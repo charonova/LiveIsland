@@ -18,8 +18,6 @@ public final class UsageLedger {
     /// Records in time order, kept until they change: the island asks for a summary every few seconds.
     private var sortedCache: [(timestamp: Date, tokens: Int)]?
     public private(set) var latestLimit: ClaudeLimitNotice?
-    /// When Claude last answered: proof that a request went out on the current login.
-    public private(set) var latestReplyAt: Date?
 
     public init() {}
 
@@ -59,7 +57,6 @@ public final class UsageLedger {
             offsets[url.path] = scan.position
             for record in scan.records where records[record.messageID] == nil {
                 records[record.messageID] = (record.timestamp, record.tokens)
-                if latestReplyAt == nil || record.timestamp > latestReplyAt! { latestReplyAt = record.timestamp }
             }
             if let notice = scan.latestLimit, latestLimit == nil || notice.observedAt > latestLimit!.observedAt {
                 latestLimit = notice
@@ -142,8 +139,10 @@ public final class UsageLedger {
                     if let id = ClaudeTranscript.messageID(in: line), !seen.insert(id).inserted { return }
                     if let record = ClaudeTranscript.usageRecord(in: line) {
                         if record.timestamp >= earliest { scan.records.append(record) }
-                    } else if let notice = ClaudeTranscript.limitNotice(in: line),
-                              scan.latestLimit == nil || notice.observedAt > scan.latestLimit!.observedAt {
+                    } else if let found = ClaudeTranscript.limitNotice(in: line),
+                              scan.latestLimit == nil || found.observedAt > scan.latestLimit!.observedAt {
+                        var notice = found
+                        notice.session = url.path
                         scan.latestLimit = notice
                     }
                 } }

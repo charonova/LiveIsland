@@ -81,6 +81,7 @@ struct UsageLedgerTests {
         let ledger = UsageLedger()
         ledger.ingest(url, now: Format.date(iso8601: "2026-10-20T09:00:00.000Z")!)
         #expect(ledger.currentLimit(at: Format.date(iso8601: "2026-10-20T09:00:00.000Z")!) != nil)
+        #expect(ledger.latestLimit?.session == url.path, "a refusal knows which session it was")
         try append(Fixture.claudeAssistant(id: "msg_after", at: "2026-10-22T11:00:00.000Z") + "\n", to: url)
         ledger.ingest(url, now: now)
         #expect(ledger.currentLimit(at: now) == nil, "Claude answered after the notice, so the limit is gone")

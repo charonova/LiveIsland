@@ -142,7 +142,7 @@ struct CodexRolloutTests {
     let modified = Date(timeIntervalSince1970: 1_792_800_000)
 
     @Test func readsTheStatusLineShape() throws {
-        let json = #"{"observed_at":1792801000.5,"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":1792810000},"seven_day":{"used_percentage":47.5,"resets_at":"2026-10-24T08:00:00Z"}}}"#
+        let json = #"{"observed_at":1792801000.5,"transcript_path":"/Users/me/.claude/projects/x/s1.jsonl","rate_limits":{"five_hour":{"used_percentage":30,"resets_at":1792810000},"seven_day":{"used_percentage":47.5,"resets_at":"2026-10-24T08:00:00Z"}}}"#
         let limits = try #require(ClaudeUsageLimits.parse(Fixture.data(json), modified: modified))
         #expect(limits.fiveHour?.usedPercent == 30)
         #expect(limits.fiveHour?.label == "5-hour")
@@ -151,6 +151,8 @@ struct CodexRolloutTests {
         #expect(limits.sevenDay?.label == "Weekly")
         #expect(limits.sevenDay?.resetsAt == Format.date(iso8601: "2026-10-24T08:00:00Z"))
         #expect(limits.observedAt == Date(timeIntervalSince1970: 1_792_801_000.5))
+        #expect(limits.session == "/Users/me/.claude/projects/x/s1.jsonl")
+        #expect(limits.current(at: Date(timeIntervalSince1970: 1_792_900_000)).session == limits.session)
     }
 
     @Test func fallsBackToTheFileDateAndIgnoresOtherShapes() {

@@ -144,12 +144,15 @@ public struct ClaudeLimitNotice: Equatable, Sendable {
     public var type: String
     public var resetsAt: Date
     public var observedAt: Date
+    /// The transcript it was logged in: which session was refused.
+    public var session: String?
 
-    public init(status: String, type: String, resetsAt: Date, observedAt: Date) {
+    public init(status: String, type: String, resetsAt: Date, observedAt: Date, session: String? = nil) {
         self.status = status
         self.type = type
         self.resetsAt = resetsAt
         self.observedAt = observedAt
+        self.session = session
     }
 
     public var isLimitReached: Bool { status == "rejected" }

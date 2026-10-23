@@ -7,11 +7,14 @@ public struct ClaudeUsageLimits: Equatable, Sendable {
     public var fiveHour: RateLimitWindow?
     public var sevenDay: RateLimitWindow?
     public var observedAt: Date
+    /// The transcript of the session that reported them, when the status line says.
+    public var session: String?
 
-    public init(fiveHour: RateLimitWindow?, sevenDay: RateLimitWindow?, observedAt: Date) {
+    public init(fiveHour: RateLimitWindow?, sevenDay: RateLimitWindow?, observedAt: Date, session: String? = nil) {
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
         self.observedAt = observedAt
+        self.session = session
     }
 
     public var windows: [RateLimitWindow] { [fiveHour, sevenDay].compactMap { $0 } }
@@ -29,7 +32,7 @@ public struct ClaudeUsageLimits: Equatable, Sendable {
             }
             return window
         }
-        return ClaudeUsageLimits(fiveHour: fresh(fiveHour), sevenDay: fresh(sevenDay), observedAt: observedAt)
+        return ClaudeUsageLimits(fiveHour: fresh(fiveHour), sevenDay: fresh(sevenDay), observedAt: observedAt, session: session)
     }
 
     /// Reads either the status line's whole input or `{"observed_at": …, "rate_limits": …}`.
@@ -41,7 +44,8 @@ public struct ClaudeUsageLimits: Equatable, Sendable {
         let observed = (object["observed_at"] as? Double).map { Date(timeIntervalSince1970: $0) } ?? modified
         let result = ClaudeUsageLimits(fiveHour: window(limits["five_hour"], minutes: 300),
                                        sevenDay: window(limits["seven_day"], minutes: 10_080),
-                                       observedAt: observed)
+                                       observedAt: observed,
+                                       session: (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         return result.windows.isEmpty ? nil : result
     }
 
