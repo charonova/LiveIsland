@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.stop()
     }
 
-    /// liveisland:// links, e.g. from Shortcuts: open[/media|agents|activity|accounts], close,
+    /// liveisland:// links, e.g. from Shortcuts: open[/media|agents|activity|accounts[/claude|codex]], close,
     /// settings[/general|island|media|agents|about], timer/<minutes>.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme == "liveisland" {
@@ -47,7 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let parts = [url.host].compactMap { $0 } + url.pathComponents.filter { $0 != "/" }
             let detail = parts.dropFirst().first?.lowercased()
             switch parts.first?.lowercased() {
-            case "open": model.expand(on: detail.flatMap { IslandTab(rawValue: $0.capitalized) })
+            case "open":
+                // open/accounts/codex picks the Codex list.
+                if let kind = parts.dropFirst(2).first.flatMap({ AgentKind(rawValue: $0.lowercased()) }) { model.accountsKind = kind }
+                model.expand(on: detail.flatMap { IslandTab(rawValue: $0.capitalized) })
             case "close": model.collapse()
             case "settings": model.openSettings(detail.flatMap(SettingsSection.init(rawValue:)) ?? .general)
             case "timer":
