@@ -56,7 +56,6 @@ final class AccountsMonitor {
     private var timer: Timer?
     private var latestLimits: ClaudeUsageLimits?
     private var latestNotice: ClaudeLimitNotice?
-    private var latestRequestAt: Date?
     /// Asked for more often while the Accounts page is open.
     var isVisible = false
 
@@ -71,16 +70,15 @@ final class AccountsMonitor {
         timer?.invalidate()
     }
 
-    /// From the agent monitor: the status line's latest limits, a limit Claude is refusing
-    /// requests for right now, and when a request last went out.
-    func observe(limits: ClaudeUsageLimits?, notice: ClaudeLimitNotice?, latestRequestAt: Date?) {
+    /// From the agent monitor: the status line's latest limits, and a limit Claude is
+    /// refusing requests for right now.
+    func observe(limits: ClaudeUsageLimits?, notice: ClaudeLimitNotice?) {
         latestLimits = limits
         latestNotice = notice
-        self.latestRequestAt = latestRequestAt
     }
 
     func refresh(forceClaudeSwap: Bool = false) {
-        let input = Worker.Input(mode: mode, limits: latestLimits, notice: latestNotice, latestRequestAt: latestRequestAt,
+        let input = Worker.Input(mode: mode, limits: latestLimits, notice: latestNotice,
                                  claudeSwapInterval: forceClaudeSwap ? 0 : (isVisible ? 60 : 300))
         queue.async { [weak self, worker] in
             let accounts = worker.tick(input, now: Date())
@@ -117,7 +115,7 @@ final class AccountsMonitor {
                 log.error("Switch failed: \(error.localizedDescription, privacy: .public)")
                 result = .failure(error)
             }
-            let accounts = worker.tick(Worker.Input(mode: mode, limits: nil, notice: nil, latestRequestAt: nil, claudeSwapInterval: 0), now: Date())
+            let accounts = worker.tick(Worker.Input(mode: mode, limits: nil, notice: nil, claudeSwapInterval: 0), now: Date())
             DispatchQueue.main.async {
                 guard let self else { return }
                 var next = self.snapshot
@@ -159,7 +157,6 @@ private final class Worker: @unchecked Sendable {
         var mode: AccountsMonitor.Switching
         var limits: ClaudeUsageLimits?
         var notice: ClaudeLimitNotice?
-        var latestRequestAt: Date?
         /// How long claude-swap's list stays fresh; 0 asks again now.
         var claudeSwapInterval: TimeInterval
     }
@@ -180,20 +177,36 @@ private final class Worker: @unchecked Sendable {
     init() {
         book = (try? Data(contentsOf: Self.bookURL)).flatMap { try? JSONDecoder().decode(AccountBook.self, from: $0) } ?? AccountBook()
         // Earlier versions could file one account's numbers under another after a switch.
+        book.migrate(now: Date())
         book.removeDuplicateReadings()
+    }
+
+    private var sessionStarts: [String: Date] = [:]
+
+    /// When a session began: its transcript's creation. A session reads Claude Code's login
+    /// when it starts, so this says which login it can be using.
+    private func started(_ transcript: String?) -> Date? {
+        guard let transcript else { return nil }
+        if let known = sessionStarts[transcript] { return known }
+        let created = (try? URL(fileURLWithPath: transcript).resourceValues(forKeys: [.creationDateKey]))?.creationDate
+        if sessionStarts.count > 200 { sessionStarts.removeAll() }
+        sessionStarts[transcript] = created
+        return created
     }
 
     func tick(_ input: Input, now: Date) -> [ClaudeAccount] {
         let before = book
         followActiveAccount(now: now)
         if input.mode == .liveIsland { keepActiveLogin(now: now) }
-        // Not yet placeable reports are tried again on every tick, until a request proves the
-        // new account is in use.
+        // A report that can't be placed yet is tried again on every tick: its reset times may
+        // become known, or it may be repeated by a newer session.
         if let limits = input.limits, limits.observedAt != recordedLimits,
-           book.record(limits, latestRequestAt: input.latestRequestAt) {
+           book.record(limits, sessionStartedAt: started(limits.session)) {
             recordedLimits = limits.observedAt
         }
-        if let notice = input.notice, notice.isLimitReached { book.record(notice) }
+        if let notice = input.notice, notice.isLimitReached {
+            book.record(notice, sessionStartedAt: started(notice.session))
+        }
         if input.mode == .claudeSwap {
             if now.timeIntervalSince(claudeSwapFetched) >= input.claudeSwapInterval, ClaudeSwapCLI.executable != nil {
                 claudeSwapFetched = now

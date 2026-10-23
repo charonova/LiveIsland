@@ -16,8 +16,6 @@ final class AgentMonitor {
         var codexLimits: CodexLimits?
         /// Claude Code's own 5-hour and weekly percentages, when the status line shares them.
         var claudeLimits: ClaudeUsageLimits?
-        /// When a request last went out, answered or refused for a limit, in any session.
-        var latestRequestAt: Date?
     }
 
     var onUpdate: ((Snapshot) -> Void)?
@@ -207,8 +205,7 @@ private final class Worker: @unchecked Sendable {
             usage: ledgerReady ? ledger.summary(now: now) : nil,
             claudeLimit: ledger.currentLimit(at: now),
             codexLimits: codexLimits,
-            claudeLimits: readClaudeLimits()?.current(at: now),
-            latestRequestAt: [ledger.latestReplyAt, ledger.latestLimit?.observedAt].compactMap { $0 }.max())
+            claudeLimits: readClaudeLimits()?.current(at: now))
     }
 
     private var claudeLimitsFile: (modified: Date, limits: ClaudeUsageLimits?)?

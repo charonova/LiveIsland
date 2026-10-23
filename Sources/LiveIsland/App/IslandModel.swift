@@ -300,7 +300,7 @@ final class IslandModel: ObservableObject {
             }
         }
         agents = next
-        accountsMonitor.observe(limits: next.claudeLimits, notice: next.claudeLimit, latestRequestAt: next.latestRequestAt)
+        accountsMonitor.observe(limits: next.claudeLimits, notice: next.claudeLimit)
     }
 
     // MARK: - Claude accounts
