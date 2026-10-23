@@ -244,7 +244,8 @@ private final class Worker: @unchecked Sendable {
         lastLoginCheck = now
         guard let modified = SecurityTool.modified(service: ClaudeLogins.claudeService, account: ClaudeLogins.claudeAccount),
               modified != loginModified, now.timeIntervalSince(modified) > 3,
-              now.timeIntervalSince(configModified ?? .distantPast) > 3
+              now.timeIntervalSince(configModified ?? .distantPast) > 3,
+              (configModified ?? .distantPast) >= modified.addingTimeInterval(-1) || now.timeIntervalSince(modified) > 60
         else { return }
         do {
             guard let saved = try ClaudeLogins.saveActive() else { return }
