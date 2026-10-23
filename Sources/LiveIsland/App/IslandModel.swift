@@ -66,8 +66,10 @@ final class IslandModel: ObservableObject {
     @Published var tab: IslandTab = .media {
         didSet { accountsMonitor.isVisible = isExpanded && tab == .accounts }
     }
-    /// Claude accounts and their limits.
+    /// Claude and Codex accounts and their limits.
     @Published private(set) var accountsState = AccountsMonitor.Snapshot()
+    /// Which accounts the Accounts page lists.
+    @Published var accountsKind: AgentKind = .claude
     /// The session row the pointer is over, for its actions.
     @Published var hoveredSession: String?
     /// Where the pointer is dragging the progress bar, 0…1.
@@ -93,6 +95,13 @@ final class IslandModel: ObservableObject {
         didSet {
             defaults.set(accountSwitching.rawValue, forKey: Key.switching)
             accountsMonitor.mode = accountSwitching
+        }
+    }
+    /// Whether LiveIsland keeps Codex logins to switch between them. Off until turned on.
+    @Published var codexSwitching: Bool {
+        didSet {
+            save(codexSwitching, Key.codexSwitching)
+            accountsMonitor.codexSwitching = codexSwitching
         }
     }
     @Published var controlPlayers: Bool {
@@ -135,6 +144,7 @@ final class IslandModel: ObservableObject {
         agentSounds = defaults.bool(forKey: Key.sounds)
         controlPlayers = defaults.bool(forKey: Key.players)
         accountSwitching = defaults.string(forKey: Key.switching).flatMap(AccountsMonitor.Switching.init(rawValue:)) ?? .off
+        codexSwitching = defaults.bool(forKey: Key.codexSwitching)
     }
 
     func start() {
@@ -150,6 +160,7 @@ final class IslandModel: ObservableObject {
         volume.start()
         accountsMonitor.onUpdate = { [weak self] in self?.accountsState = $0 }
         accountsMonitor.mode = accountSwitching
+        accountsMonitor.codexSwitching = codexSwitching
         accountsMonitor.start()
         if controlPlayers { scripted.start() }
         agentMonitor.start()
@@ -300,12 +311,13 @@ final class IslandModel: ObservableObject {
             }
         }
         agents = next
-        accountsMonitor.observe(limits: next.claudeLimits, notice: next.claudeLimit)
+        accountsMonitor.observe(limits: next.claudeLimits, notice: next.claudeLimit, codexLimits: next.codexLimits)
     }
 
     // MARK: - Claude accounts
 
     var accounts: [ClaudeAccount] { accountsState.accounts }
+    var codexAccounts: [ClaudeAccount] { accountsState.codexAccounts }
 
     /// The account in use, when it ran out: by its own numbers, which include the limit Claude
     /// gave when it refused a request. A refusal still pending from the previous account
@@ -317,6 +329,13 @@ final class IslandModel: ObservableObject {
 
     /// Where to go next: the account with the most room that can be switched to.
     var bestAccount: ClaudeAccount? { ClaudeAccount.best(accounts, at: clock) }
+
+    var exhaustedCodexAccount: ClaudeAccount? {
+        guard let active = accountsState.activeCodex, active.current(at: clock).isAtLimit else { return nil }
+        return active
+    }
+
+    var bestCodexAccount: ClaudeAccount? { ClaudeAccount.best(codexAccounts, at: clock) }
 
     func switchAccount(_ account: ClaudeAccount) {
         accountsMonitor.switchTo(account)
@@ -380,6 +399,9 @@ final class IslandModel: ObservableObject {
         }
         if showAgents, let exhausted = exhaustedAccount, let best = bestAccount {
             list.append(.accountLimit(account: exhausted.identity.displayName, switchTo: best.identity.displayName))
+        }
+        if showAgents, let exhausted = exhaustedCodexAccount, let best = bestCodexAccount {
+            list.append(.accountLimit(account: "Codex · " + exhausted.identity.email, switchTo: best.identity.email))
         }
         if let transient { list.append(transient) }
         if showCalendar, let event = upcomingEvent(at: now) { list.append(.eventSoon(title: event.title, startsAt: event.start)) }
@@ -463,7 +485,9 @@ final class IslandModel: ObservableObject {
     private var suggestedTab: IslandTab {
         switch primary {
         case .agentNeedsYou, .agentDone, .agentWorking: return .agents
-        case .accountLimit: return .accounts
+        case .accountLimit(let account, _):
+            accountsKind = account.hasPrefix("Codex") ? .codex : .claude
+            return .accounts
         case .nowPlaying: return .media
         case .call, .timer, .timerFinished, .headphonesConnected, .charging, .eventSoon, .cameraOn, .microphoneOn: return .activity
         case nil: return nowPlaying != nil ? .media : (sessions.isEmpty ? .activity : .agents)
@@ -553,5 +577,6 @@ final class IslandModel: ObservableObject {
         static let sounds = "agentSounds"
         static let players = "controlPlayers"
         static let switching = "accountSwitching"
+        static let codexSwitching = "codexSwitching"
     }
 }
