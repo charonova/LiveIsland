@@ -1,8 +1,8 @@
 import LiveIslandCore
 import SwiftUI
 
-/// Every Claude account used on this Mac, with its 5-hour and weekly limits, and a Switch
-/// button when switching is set up.
+/// Every Claude and Codex account used on this Mac, with its 5-hour and weekly limits, and a
+/// Switch button when switching is set up.
 struct AccountsPage: View {
     @EnvironmentObject private var model: IslandModel
 
@@ -10,9 +10,7 @@ struct AccountsPage: View {
         let state = model.accountsState
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("Claude accounts").font(.system(size: 12, weight: .bold))
-                Chip(text: model.accountSwitching == .off ? "Switching off" : "Switch with \(model.accountSwitching.title)",
-                     color: model.accountSwitching == .off ? .gray : .orange)
+                KindPicker()
                 Spacer(minLength: 6)
                 if let message = state.message {
                     Label(message, systemImage: state.messageIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
@@ -28,19 +26,35 @@ struct AccountsPage: View {
                 .buttonStyle(PressableStyle())
                 .help("Account settings")
             }
-            if state.accounts.isEmpty {
+            if state.accounts.isEmpty && state.codexAccounts.isEmpty {
                 VStack(spacing: 6) {
                     Image(systemName: "person.2.fill").font(.system(size: 26)).foregroundStyle(.white.opacity(0.35))
                     Text("No accounts yet").font(.system(size: 13, weight: .semibold))
-                    Text("Use Claude Code once and its account shows up here. Log in to more with /login.")
+                    Text("Use Claude Code or Codex once and the account shows up here. Log in to more with /login or codex login.")
                         .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                let codex = model.accountsKind == .codex
                 ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(state.accounts) { account in
-                            AccountRow(account: account, isBest: account.id == model.bestAccount?.id)
+                    VStack(alignment: .leading, spacing: 6) {
+                        if codex {
+                            SectionHeader(kind: .codex, detail: model.codexSwitching ? "Switch with LiveIsland" : "Switching off",
+                                          on: model.codexSwitching)
+                            if state.codexAccounts.isEmpty {
+                                Text("Use Codex once and its account shows up here. Log in to more with codex login.")
+                                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).padding(.top, 8)
+                            }
+                            ForEach(state.codexAccounts) { account in
+                                AccountRow(account: account, isBest: account.id == model.bestCodexAccount?.id)
+                            }
+                        } else {
+                            SectionHeader(kind: .claude,
+                                          detail: model.accountSwitching == .off ? "Switching off" : "Switch with \(model.accountSwitching.title)",
+                                          on: model.accountSwitching != .off)
+                            ForEach(state.accounts) { account in
+                                AccountRow(account: account, isBest: account.id == model.bestAccount?.id)
+                            }
                         }
                     }
                 }
@@ -48,6 +62,48 @@ struct AccountsPage: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: state.message)
+    }
+}
+
+/// Claude Code or Codex, with how many accounts each has.
+private struct KindPicker: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach([AgentKind.claude, .codex], id: \.self) { kind in
+                let selected = model.accountsKind == kind
+                let count = kind == .claude ? model.accounts.count : model.codexAccounts.count
+                Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { model.accountsKind = kind } } label: {
+                    HStack(spacing: 5) {
+                        AgentGlyph(kind: kind, size: 8).frame(width: 12, height: 12)
+                        Text(kind.displayName).font(.system(size: 11, weight: .semibold))
+                        Text("\(count)").font(.system(size: 10, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.5))
+                    }
+                    .padding(.horizontal, 9)
+                    .frame(height: 24)
+                    .background(Capsule().fill(.white.opacity(selected ? 0.16 : 0)))
+                    .foregroundStyle(selected ? Color.white : .white.opacity(0.55))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(.white.opacity(0.06)))
+    }
+}
+
+private struct SectionHeader: View {
+    let kind: AgentKind
+    let detail: String
+    let on: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Chip(text: detail, color: on ? .orange : .gray)
+            Spacer(minLength: 0)
+        }
     }
 }
 
@@ -92,7 +148,8 @@ private struct AccountRow: View {
         } else if model.accountsState.switching == account.id {
             ProgressView().controlSize(.small).frame(width: 64)
         } else if account.needsLogin {
-            Chip(text: "Sign in again", color: .orange).help("Log in to \(account.identity.email) once with /login in Claude Code")
+            Chip(text: "Sign in again", color: .orange)
+                .help("Log in to \(account.identity.email) once with \(account.kind == .codex ? "codex login" : "/login in Claude Code")")
         } else if account.switcher != nil {
             Button { model.switchAccount(account) } label: {
                 Text(isBest ? "Switch ★" : "Switch").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).frame(height: 26)
@@ -101,10 +158,10 @@ private struct AccountRow: View {
             .buttonStyle(PressableStyle())
             .liquidGlass(in: Capsule(), tint: isBest ? Color.orange.opacity(0.35) : nil, interactive: true)
             .disabled(model.accountsState.switching != nil)
-            .help(isBest ? "The account with the most room" : "Use this account in Claude Code")
-        } else if model.accountSwitching != .off {
+            .help(isBest ? "The account with the most room" : "Use this account in \(account.kind.displayName)")
+        } else if account.kind == .codex ? model.codexSwitching : model.accountSwitching != .off {
             Text("Not saved").font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.4))
-                .help("Log in to it once with /login so LiveIsland can switch to it")
+                .help(account.kind == .codex ? "Log in to it once with codex login so LiveIsland can switch to it" : "Log in to it once with /login so LiveIsland can switch to it")
         }
     }
 }

@@ -216,7 +216,7 @@ private struct AccountsGlow: View {
     @EnvironmentObject private var model: IslandModel
 
     var body: some View {
-        let exhausted = model.exhaustedAccount != nil
+        let exhausted = model.exhaustedAccount != nil || model.exhaustedCodexAccount != nil
         Glows(spots: [
             ((exhausted ? Color.orange : .green).opacity(0.26), UnitPoint(x: 0.1, y: 0.8), 320),
             (Color.indigo.opacity(0.26), UnitPoint(x: 0.9, y: 0.9), 300),
@@ -943,12 +943,23 @@ private struct ClaudeUsage: View {
 private struct CodexUsage: View {
     @EnvironmentObject private var model: IslandModel
 
+    /// With several Codex accounts, only numbers filed under the one in use.
+    private var activeWindows: [RateLimitWindow]? {
+        if model.codexAccounts.count > 1 {
+            let windows = [model.accountsState.activeCodex?.fiveHour, model.accountsState.activeCodex?.sevenDay].compactMap { $0 }
+            return windows.isEmpty ? nil : windows
+        }
+        guard let windows = model.agents.codexLimits?.windows, !windows.isEmpty else { return nil }
+        return windows
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProviderTitle(kind: .codex, detail: nil)
-            if let limits = model.agents.codexLimits, !limits.windows.isEmpty {
+            ProviderTitle(kind: .codex, detail: model.codexAccounts.count > 1
+                          ? model.accountsState.activeCodex?.identity.email.components(separatedBy: "@").first : nil)
+            if let windows = activeWindows {
                 HStack(spacing: 0) {
-                    ForEach(limits.windows, id: \.windowMinutes) { window in
+                    ForEach(windows, id: \.windowMinutes) { window in
                         RingGauge(window: window, tint: AgentGlyph(kind: .codex).color).frame(maxWidth: .infinity)
                     }
                 }
