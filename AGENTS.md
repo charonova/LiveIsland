@@ -68,6 +68,13 @@ ffmpeg -i recording.mov -an -vf "crop=2200:1430:1398:0,fps=30,scale=1100:-2:flag
 ffmpeg -ss 58.5 -i recording.mov -frames:v 1 -vf "crop=1260:620:1418:0" -q:v 3 demo/island-agents.jpg   # one per page
 ```
 
+Screenshots of the running app don't need a recording. Open each page with a link and capture only LiveIsland's window, which keeps its transparency (find the window number with `CGWindowListCopyWindowInfo`, owner "LiveIsland"). Capture within a second of opening: the island closes when the pointer passes over it and leaves. Then crop to the island and blur emails (the Accounts tab, and the account name on Agents):
+
+```bash
+open "liveisland://open/accounts"; sleep 0.8; screencapture -x -o -l<window> accounts.png
+ffmpeg -i accounts.png -vf "crop=1300:640:110:0" demo/island-accounts.png
+```
+
 Blur email addresses before anything leaves the Mac (the Accounts tab and Settings show them). Blur each email line while the tab is open, and the whole name column while rows re-sort after a switch, so no address slides past mid-animation; find those moments with `select='gt(scene,0.05)'` on the column. Then check the column frame by frame:
 
 ```bash
