@@ -132,7 +132,8 @@ final class LevelBarsView: NSView {
     func show(_ levels: [Float]) {
         guard isLive else { return }
         let values = AudioLevels.bars(levels, count: style.bars)
-        let lowest = style.width
+        // Playing bars never shrink to dots (those mean paused): the quietest is a short pill.
+        let lowest = max(style.width * 1.5, style.height * 0.26)
         heights = values.map { lowest + (style.height - lowest) * CGFloat(pow(Double($0), 0.85)) }
         place(duration: AudioLevelMeter.tick)
     }

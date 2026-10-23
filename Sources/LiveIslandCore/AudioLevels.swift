@@ -5,10 +5,10 @@ import Foundation
 /// each 0…1. Bars rise at once and fall back smoothly. Each band is measured against its own
 /// recent average, so bars dance to the beat at any volume, while silence stays flat.
 public final class AudioLevels {
-    public static let fftSize = 1024
+    public static let fftSize = 2048
     public let bandCount: Int
 
-    private let log2n = vDSP_Length(10)
+    private let log2n = vDSP_Length(11)
     private let setup: FFTSetup
     private var window: [Float]
     private var windowed: [Float]
