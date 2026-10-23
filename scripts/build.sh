@@ -17,8 +17,9 @@ fi
 # 2. The app. UNIVERSAL=1 builds for Intel Macs too (releases do).
 ARCHS=()
 [ "${UNIVERSAL:-0}" = 1 ] && ARCHS=(--arch arm64 --arch x86_64)
-swift build -c release "${ARCHS[@]}"
-BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)/LiveIsland"
+# ${ARCHS[@]+…}: macOS's bash 3.2 calls an empty array unbound under `set -u`.
+swift build -c release ${ARCHS[@]+"${ARCHS[@]}"}
+BIN="$(swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)/LiveIsland"
 
 APP="build/LiveIsland.app"
 rm -rf "$APP"
