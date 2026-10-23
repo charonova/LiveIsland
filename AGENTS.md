@@ -30,7 +30,10 @@ pkill -x LiveIsland; open build/LiveIsland.app
 open "liveisland://open"          # open the island without the mouse
 /usr/bin/log show --last 5m --predicate 'subsystem == "com.aissam.liveisland"'
 LIVEISLAND_REAL_DATA=1 ./scripts/test.sh -c release --filter RealData   # time a read of the real transcripts
+./scripts/release.sh              # → dist/LiveIsland.zip (Apple silicon + Intel, macOS 14+) and its SHA-256
 ```
+
+Releases: bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, run `./scripts/release.sh`, and attach `dist/LiveIsland.zip` to a GitHub release under exactly that name (the README's install command downloads `releases/latest/download/LiveIsland.zip`). With `LIVEISLAND_IDENTITY` (a Developer ID) and `LIVEISLAND_NOTARY_PROFILE` set, the script also signs for distribution and notarizes. Check that both binaries say `macOS 14.0+`: CMake would otherwise stamp the adapter with the SDK's version, and older Macs couldn't load it.
 
 Measure CPU as CPU time over a minute, not `ps %cpu` (a decaying average that overstates bursts):
 
@@ -56,17 +59,14 @@ Every change to `LiveIslandCore` needs tests, with fixtures shaped like real tra
 
 ## Demo media
 
-`demo/` holds the README's GIF, video and screenshots, made from a full-screen recording (`recording.mov`, 4096×2648 on a scaled Retina display). Always drop the audio, and cut anything that shows private content (a terminal with a conversation, files on the desktop). Screen recordings have a variable frame rate, so cut with `trim` + `concat` rather than `select`.
+`demo/` holds the README's screenshots, captured from LiveIsland's own window (below). The waveform only moves while music plays, so capture the Media page and the shared notch (`island-split.png`, an agent working while music plays) with a song playing; ad-hoc rebuilds make macOS ask for system audio recording again first.
+
+For a GIF, record a region with `screencapture -x -v -V <seconds> -R <x,y,w,h> clip.mov` (points, top-left origin), drop the audio, and cut anything private (a terminal with a conversation, files on the desktop). Screen recordings have a variable frame rate, so cut with `trim` + `concat` rather than `select`:
 
 ```bash
-ISLAND="crop=1300:640:1398:0"   # the island's region in the recording; adjust for a new one
-ffmpeg -i recording.mov -an -filter_complex "[0:v]trim=4:16,setpts=PTS-STARTPTS[a];[0:v]trim=64:69,setpts=PTS-STARTPTS[b];\
-[a][b]concat=n=2:v=1:a=0,$ISLAND,fps=12,scale=720:-1:flags=lanczos,split[x][y];\
+ffmpeg -i clip.mov -an -filter_complex "[0:v]trim=1:7,setpts=PTS-STARTPTS,fps=12,scale=720:-1:flags=lanczos,split[x][y];\
 [x]palettegen=max_colors=192:stats_mode=diff[p];[y][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
-  -loop 0 demo/demo.gif   # keep it under ~10 MB
-ffmpeg -i recording.mov -an -vf "crop=2200:1430:1398:0,fps=30,scale=1100:-2:flags=lanczos" \
-  -c:v libx264 -preset slow -crf 29 -pix_fmt yuv420p -movflags +faststart demo/demo.mp4
-ffmpeg -ss 58.5 -i recording.mov -frames:v 1 -vf "crop=1260:620:1418:0" -q:v 3 demo/island-agents.jpg   # one per page
+  -loop 0 demo/clip.gif   # keep it under ~10 MB
 ```
 
 Screenshots of the running app don't need a recording. Open each page with a link and capture only LiveIsland's window, which keeps its transparency (find the window number with `CGWindowListCopyWindowInfo`, owner "LiveIsland"). Capture within a second of opening: the island closes when the pointer passes over it and leaves. Then crop to the island and blur emails (the Accounts tab, and the account name on Agents):
