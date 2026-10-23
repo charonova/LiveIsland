@@ -47,7 +47,7 @@ private struct TabBar: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(IslandTab.allCases) { tab in
+            ForEach(model.tabOrder) { tab in
                 let selected = model.tab == tab
                 Button {
                     withAnimation(tabSpring) { model.tab = tab }

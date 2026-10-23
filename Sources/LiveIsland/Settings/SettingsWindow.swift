@@ -223,10 +223,64 @@ private struct IslandPage: View {
                 ToggleRow(symbol: "airpodspro", tint: .blue, title: "AirPods & Charging", detail: "Battery levels when they connect", isOn: $model.showDevices)
                 ToggleRow(symbol: "calendar", tint: .red, title: "Calendar", detail: "Events starting within 10 minutes", isOn: $model.showCalendar)
             }
+            Section {
+                ForEach(Array(model.tabOrder.enumerated()), id: \.element) { index, tab in
+                    TabOrderRow(tab: tab, index: index, count: model.tabOrder.count)
+                }
+            } header: {
+                Text("Tabs")
+            } footer: {
+                HStack(alignment: .top) {
+                    Text("The island shows its tabs in this order. When nothing's going on, it opens on the first one with something to show; an agent that needs you or a call still opens its own tab.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    if model.tabOrder != IslandTab.allCases {
+                        Button("Reset") { withAnimation { model.resetTabOrder() } }
+                            .controlSize(.small)
+                    }
+                }
+            }
             Section("Look") {
                 ToggleRow(symbol: "sun.max.fill", tint: .purple, title: "Background glow",
                           detail: "Color the open island: the cover's colors on Media, the agents' on Agents", isOn: $model.ambientGlow)
             }
+        }
+    }
+}
+
+/// One tab in the order list, with buttons to move it up or down.
+private struct TabOrderRow: View {
+    @EnvironmentObject private var model: IslandModel
+    let tab: IslandTab
+    let index: Int
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            IconBadge(symbol: tab.symbol, tint: tint, size: 26)
+            Text(tab.rawValue)
+            Spacer()
+            Button { withAnimation { model.moveTab(tab, by: -1) } } label: {
+                Image(systemName: "chevron.up").frame(width: 22, height: 22).contentShape(Rectangle())
+            }
+            .disabled(index == 0)
+            .help("Move \(tab.rawValue) left")
+            Button { withAnimation { model.moveTab(tab, by: 1) } } label: {
+                Image(systemName: "chevron.down").frame(width: 22, height: 22).contentShape(Rectangle())
+            }
+            .disabled(index == count - 1)
+            .help("Move \(tab.rawValue) right")
+        }
+        .buttonStyle(.borderless)
+        .font(.system(size: 12, weight: .semibold))
+    }
+
+    private var tint: Color {
+        switch tab {
+        case .media: return .pink
+        case .agents: return .orange
+        case .activity: return .blue
+        case .accounts: return .purple
         }
     }
 }

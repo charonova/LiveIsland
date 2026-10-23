@@ -94,6 +94,10 @@ final class IslandModel: ObservableObject {
     @Published var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
     @Published var ambientGlow: Bool { didSet { save(ambientGlow, Key.glow) } }
     @Published var agentSounds: Bool { didSet { save(agentSounds, Key.sounds) } }
+    /// The order of the island's tabs, picked in Settings › Island.
+    @Published var tabOrder: [IslandTab] {
+        didSet { defaults.set(tabOrder.map(\.rawValue), forKey: Key.tabOrder) }
+    }
     /// Bars that move with the real sound, instead of the animated symbol.
     @Published var liveWaveform: Bool {
         didSet {
@@ -156,6 +160,7 @@ final class IslandModel: ObservableObject {
         ambientGlow = defaults.bool(forKey: Key.glow)
         agentSounds = defaults.bool(forKey: Key.sounds)
         liveWaveform = defaults.bool(forKey: Key.waveform)
+        tabOrder = Ordering.restore(defaults.stringArray(forKey: Key.tabOrder) ?? [], all: IslandTab.allCases, name: \.rawValue)
         controlPlayers = defaults.bool(forKey: Key.players)
         accountSwitching = defaults.string(forKey: Key.switching).flatMap(AccountsMonitor.Switching.init(rawValue:)) ?? .off
         codexSwitching = defaults.bool(forKey: Key.codexSwitching)
@@ -511,8 +516,29 @@ final class IslandModel: ObservableObject {
             return .accounts
         case .nowPlaying: return .media
         case .call, .timer, .timerFinished, .headphonesConnected, .charging, .eventSoon, .cameraOn, .microphoneOn: return .activity
-        case nil: return nowPlaying != nil ? .media : (sessions.isEmpty ? .activity : .agents)
+        case nil: return tabOrder.first(where: hasContent) ?? .activity
         }
+    }
+
+    /// Whether a tab has something to show, so a quiet island opens on the first one that does.
+    private func hasContent(_ tab: IslandTab) -> Bool {
+        switch tab {
+        case .media: return nowPlaying != nil
+        case .agents: return !sessions.isEmpty
+        case .activity: return true
+        case .accounts: return !accounts.isEmpty || !codexAccounts.isEmpty
+        }
+    }
+
+    // MARK: - Tab order
+
+    func moveTab(_ tab: IslandTab, by offset: Int) {
+        guard let index = tabOrder.firstIndex(of: tab) else { return }
+        tabOrder = Ordering.move(tabOrder, from: index, by: offset)
+    }
+
+    func resetTabOrder() {
+        tabOrder = IslandTab.allCases
     }
 
     // MARK: - Timer
@@ -598,6 +624,7 @@ final class IslandModel: ObservableObject {
         static let sounds = "agentSounds"
         static let players = "controlPlayers"
         static let waveform = "liveWaveform"
+        static let tabOrder = "tabOrder"
         static let switching = "accountSwitching"
         static let codexSwitching = "codexSwitching"
     }
