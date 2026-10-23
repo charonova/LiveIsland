@@ -1,7 +1,7 @@
 import Foundation
 
-/// Who a Claude Code login belongs to, from the `oauthAccount` object Claude Code keeps in
-/// `~/.claude.json`.
+/// Who a login belongs to: for Claude Code, from the `oauthAccount` object it keeps in
+/// `~/.claude.json`; for Codex, from its `auth.json` (`CodexLogin`).
 public struct ClaudeAccountIdentity: Codable, Equatable, Sendable {
     public var accountUUID: String
     public var email: String
@@ -28,7 +28,10 @@ public struct ClaudeAccountIdentity: Codable, Equatable, Sendable {
         email.lowercased() + "|" + (organization ?? "")
     }
 
-    public var plan: String? { ClaudePlan.label(tier: tier) }
+    /// Claude's tiers name Claude ("default_claude_max_20x"); anything else is a ChatGPT plan.
+    public var plan: String? {
+        tier?.lowercased().contains("claude") == true ? ClaudePlan.label(tier: tier) : CodexPlan.label(planType: tier)
+    }
 
     /// What to call the account: the person's name when Claude has one, else the email.
     public var displayName: String {
@@ -373,6 +376,7 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
     }
 
     public var identity: ClaudeAccountIdentity
+    public var kind: AgentKind
     public var isActive: Bool
     public var fiveHour: RateLimitWindow?
     public var sevenDay: RateLimitWindow?
@@ -383,12 +387,13 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
     public var needsLogin: Bool
     public var claudeSwapNumber: Int?
 
-    public var id: String { identity.key }
+    public var id: String { kind.rawValue + ":" + identity.key }
 
-    public init(identity: ClaudeAccountIdentity, isActive: Bool = false, fiveHour: RateLimitWindow? = nil,
+    public init(identity: ClaudeAccountIdentity, kind: AgentKind = .claude, isActive: Bool = false, fiveHour: RateLimitWindow? = nil,
                 sevenDay: RateLimitWindow? = nil, limitsObservedAt: Date? = nil, switcher: Switcher? = nil,
                 needsLogin: Bool = false, claudeSwapNumber: Int? = nil) {
         self.identity = identity
+        self.kind = kind
         self.isActive = isActive
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
@@ -484,6 +489,20 @@ public enum ClaudeSwapJSON {
         }
         guard let switched = object["switched"] as? Bool else { return nil }
         return (switched, object["message"] as? String ?? "")
+    }
+}
+
+public enum CodexAccounts {
+    public static func list(book: AccountBook, switching: Bool, now: Date) -> [ClaudeAccount] {
+        book.entries.map { key, entry in
+            ClaudeAccount(identity: entry.identity, kind: .codex, isActive: key == book.activeKey,
+                          fiveHour: entry.fiveHour, sevenDay: entry.sevenDay, limitsObservedAt: entry.limitsObservedAt,
+                          switcher: switching && entry.hasSavedLogin ? .liveIsland : nil)
+                .current(at: now)
+        }
+        .sorted { lhs, rhs in
+            lhs.isActive != rhs.isActive ? lhs.isActive : lhs.identity.email.localizedCaseInsensitiveCompare(rhs.identity.email) == .orderedAscending
+        }
     }
 }
 
