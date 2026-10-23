@@ -6,7 +6,7 @@ import LiveIslandCore
 enum ClaudeStatusLine {
     static let block = """
     # LiveIsland: share Claude Code's usage limits with the island (delete these lines to stop).
-    if limits=$(printf '%s' "$input" | jq -c 'select(.rate_limits != null) | {observed_at: now, rate_limits}' 2>/dev/null) && [ -n "$limits" ]; then
+    if limits=$(printf '%s' "$input" | jq -c 'select(.rate_limits != null) | {observed_at: now, transcript_path, rate_limits}' 2>/dev/null) && [ -n "$limits" ]; then
       printf '%s\\n' "$limits" > "$HOME/.claude/\(ClaudeUsageLimits.fileName).tmp" && mv -f "$HOME/.claude/\(ClaudeUsageLimits.fileName).tmp" "$HOME/.claude/\(ClaudeUsageLimits.fileName)"
     fi
     """
@@ -48,22 +48,42 @@ enum ClaudeStatusLine {
         return text.contains(ClaudeUsageLimits.fileName)
     }
 
+    /// Lines added by an earlier version, which didn't say which session reported the limits:
+    /// without that, accounts can't be told apart after a switch.
+    static var needsUpdate: Bool {
+        guard let url = try? script(), let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+        return text.contains(ClaudeUsageLimits.fileName) && !text.contains("transcript_path, rate_limits")
+    }
+
     /// Adds the lines right after the script reads its input, keeping a copy of the original
     /// next to it.
     static func install() throws -> URL {
         let url = try script()
         var text = try String(contentsOf: url, encoding: .utf8)
-        guard !text.contains(ClaudeUsageLimits.fileName) else { return url }
         var lines = text.components(separatedBy: "\n")
+        // An earlier version's lines: replace them in place.
+        if let start = lines.firstIndex(where: { $0.hasPrefix("# LiveIsland: share") }),
+           let end = lines[start...].firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "fi" }) {
+            guard needsUpdate else { return url }
+            try backUp(url)
+            lines.replaceSubrange(start...end, with: block.components(separatedBy: "\n"))
+            try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+            return url
+        }
+        guard !text.contains(ClaudeUsageLimits.fileName) else { return url }
         guard let index = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("input=$(cat") }) else {
             throw Failure.noInputLine(url.path)
         }
-        let backup = url.appendingPathExtension("liveisland-backup")
-        try? FileManager.default.removeItem(at: backup)
-        try FileManager.default.copyItem(at: url, to: backup)
+        try backUp(url)
         lines.insert(contentsOf: ["", block], at: index + 1)
         text = lines.joined(separator: "\n")
         try text.write(to: url, atomically: true, encoding: .utf8)
         return url
+    }
+
+    private static func backUp(_ url: URL) throws {
+        let backup = url.appendingPathExtension("liveisland-backup")
+        try? FileManager.default.removeItem(at: backup)
+        try FileManager.default.copyItem(at: url, to: backup)
     }
 }

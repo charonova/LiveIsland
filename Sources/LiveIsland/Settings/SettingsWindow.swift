@@ -322,6 +322,13 @@ private struct AgentsSettingsPage: View {
             }
             AccountsSettingsSection()
             Section {
+                if ClaudeStatusLine.needsUpdate {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Your status line has LiveIsland's lines from an earlier version, which don't say which session reported the limits. Update them so each account gets its own numbers.")
+                            .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Update My Status Line") { model.installStatusLine() }.glassButton(prominent: true)
+                    }
+                }
                 if let limits = model.agents.claudeLimits {
                     ForEach(limits.windows, id: \.windowMinutes) { window in
                         LabeledContent(window.windowMinutes == 300 ? "5-hour limit" : "Weekly limit") {
@@ -468,7 +475,7 @@ private struct AccountsSettingsSection: View {
             VStack(alignment: .leading, spacing: 4) {
                 Label("Add an account: run /login in Claude Code and sign in to it. Don't use /logout: it can cancel the saved login of the account you leave.",
                       systemImage: "person.badge.plus")
-                Label("Running sessions move to the new account within about 30 seconds.", systemImage: "clock")
+                Label("New Claude Code sessions use the new account. Sessions already running can keep the previous one: restart them (claude --continue picks up where you left off).", systemImage: "clock")
                 Label("Use one switcher at a time. Each keeps its own copy of every login, and Claude Code replaces a login when it refreshes it, so the other copy goes stale.",
                       systemImage: "exclamationmark.arrow.triangle.2.circlepath")
             }
