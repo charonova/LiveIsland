@@ -9,7 +9,7 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-73%20passing-success)
+![Tests](https://img.shields.io/badge/tests-79%20passing-success)
 
 <br>
 
@@ -71,6 +71,7 @@
 
 **Everyday use**
 - Opens on hover (or click), closes when you move away; clicks pass straight through everywhere else
+- **Your tab order**: put Media, Agents, Activity and Accounts in the order you like (Settings › Island)
 - Settings window, menu bar panel, Open at Login, `liveisland://` links for Shortcuts
 - Liquid Glass on macOS 26+, with a material fallback on earlier systems
 - On Macs without a notch, the island sits at the top of the screen
@@ -176,7 +177,7 @@ Everything works without any of them; the matching feature just stays empty.
 LIVEISLAND_REAL_DATA=1 ./scripts/test.sh -c release --filter RealData   # read your own transcripts, timed
 ```
 
-The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
+The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, the tab order (kept as tabs come and go), timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
 
 ## Automation
 
