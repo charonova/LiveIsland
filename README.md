@@ -13,9 +13,11 @@
 
 <br>
 
-<a href="demo/demo.mp4"><img src="demo/demo.gif" width="720" alt="LiveIsland: the Media page with Spotify, the Agents page with Claude Code and Codex limits, the Activity page, then Recently Played"></a>
+<img src="demo/island-media.png" width="720" alt="The Media page: Spotify's track with its cover glow, a live waveform beside the title, scrubber, controls and volume">
 
-<sub>Media, AI agents, activity and Recently Played. <a href="demo/demo.mp4">Watch the full video</a>, with Settings and the menu bar panel.</sub>
+<img src="demo/island-split.png" width="560" alt="The closed island shared by two things: Claude Code on the left, the music's waveform on the right">
+
+<sub>The Media page with its live waveform, and the notch shared by Claude Code and the music, like the iPhone's.</sub>
 
 </div>
 
@@ -26,10 +28,6 @@
 <table>
   <tr>
     <td align="center" width="33%">
-      <img src="demo/island-media.png" alt="Media page: Spotify track with artwork glow, scrubber, controls, volume and Recently Played"><br>
-      <sub><b>Media</b><br>Any player, glow from the cover, Up Next</sub>
-    </td>
-    <td align="center" width="33%">
       <img src="demo/island-agents.png" alt="Agents page: Claude Code sessions with states, and rings for the 5-hour and weekly limits of Claude Code and Codex"><br>
       <sub><b>Agents</b><br>Sessions, states, real usage limits</sub>
     </td>
@@ -37,17 +35,7 @@
       <img src="demo/island-activity.png" alt="Activity page: timer presets, calendar, battery, AirPods, microphone and camera tiles"><br>
       <sub><b>Activity</b><br>Timer, calendar, battery, devices, privacy</sub>
     </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="demo/island-compact.jpg" alt="The closed island: Claude working for 23 seconds, the microphone in use, a session done"><br>
-      <sub><b>In the notch</b><br>Working, microphone in use, done</sub>
-    </td>
-    <td align="center">
-      <img src="demo/menu-bar.jpg" width="220" alt="Menu bar panel: mini player, quick toggles, timer and Open Island"><br>
-      <sub><b>Menu bar</b><br>Mini player and quick switches</sub>
-    </td>
-    <td align="center">
+    <td align="center" width="33%">
       <img src="demo/settings-agents.png" alt="Settings window, AI Agents page: agent toggles, sound, and how to switch Claude accounts"><br>
       <sub><b>Settings</b><br>Everything, in one window</sub>
     </td>
@@ -71,7 +59,7 @@
 - Copy the command that resumes a session
 - **Usage limits as rings**: Claude Code's real 5-hour and weekly percentages (one click to set up, see below), Codex's 5-hour and weekly limits, tokens this window and today
 - Optional sound when an agent finishes or stops to ask you something
-- **Several Claude and Codex accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching (see below)
+- **Several Claude and Codex accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching, also from the menu bar (see below)
 
 **Calls, devices and the rest**
 - Call timer for FaceTime, Zoom, Teams, Discord, WhatsApp, Slack and more
@@ -79,6 +67,7 @@
 - **AirPods** battery (left, right, case) when they connect; charging, and time left on battery
 - Quick **timers**, your next **calendar** events, and a heads-up in the notch 10 minutes before
 - The most important thing wins the notch: a call beats an agent that needs you, which beats music
+- **Two things at once**: while music plays, an agent or a timer shares the notch with the waveform, like the iPhone
 
 **Everyday use**
 - Opens on hover (or click), closes when you move away; clicks pass straight through everywhere else
@@ -103,12 +92,6 @@ Prefer to do it yourself? The lines are in [`scripts/claude-statusline-snippet.s
     <td align="center" width="50%">
       <img src="demo/island-accounts-codex.png" alt="Accounts tab on Codex: the ChatGPT account in use, its Pro Lite plan and its weekly limit"><br>
       <sub><b>Codex</b><br>ChatGPT logins, with their plan and limits</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2">
-      <img src="demo/menu-bar-accounts.jpg" width="300" alt="Menu bar panel with the account in use, its limits, and a Switch menu listing the other accounts"><br>
-      <sub><b>Menu bar</b><br>Switch without opening the island</sub>
     </td>
   </tr>
 </table>
@@ -159,13 +142,24 @@ Nothing animates frame by frame unless you can see it: spinners and waveforms ar
 
 ## Install
 
+**Download** the latest release (macOS 14 or later, Apple silicon and Intel) and open it, in one Terminal command:
+
 ```bash
-git clone https://github.com/<your-username>/LiveIsland.git
+curl -fL https://github.com/charonova/LiveIsland/releases/latest/download/LiveIsland.zip -o /tmp/LiveIsland.zip \
+  && mkdir -p ~/Applications && ditto -xk /tmp/LiveIsland.zip ~/Applications && open ~/Applications/LiveIsland.app
+```
+
+LiveIsland isn't notarized by Apple yet (that needs a paid developer account), so a copy downloaded in a browser gets "Apple could not verify LiveIsland" the first time. Installed with the command above, it opens right away. If you downloaded [the zip](https://github.com/charonova/LiveIsland/releases/latest) in a browser, unzip it, move LiveIsland to Applications, open it once, then click **Open Anyway** in **System Settings › Privacy & Security**.
+
+**Build it yourself** instead, with the Xcode Command Line Tools and CMake (`brew install cmake`, for the media adapter):
+
+```bash
+git clone https://github.com/charonova/LiveIsland.git
 cd LiveIsland
 ./scripts/install.sh   # builds, copies to ~/Applications and launches
 ```
 
-You need the Xcode Command Line Tools and CMake (`brew install cmake`), which builds the media adapter. macOS will ask for:
+macOS will ask for:
 
 - **Calendar**, for your next events
 - **Bluetooth**, for AirPods battery
