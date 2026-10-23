@@ -3,19 +3,22 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# 1. The now-playing adapter (vendored, BSD-3), built once and reused.
+# 1. The now-playing adapter (vendored, BSD-3), built once and reused. It's built for macOS 14
+#    like the app: left to CMake, it would only load on the SDK's own macOS version.
 ADAPTER_SRC="ThirdParty/mediaremote-adapter"
-ADAPTER_BUILD=".build/mediaremote-adapter"
+ADAPTER_BUILD=".build/mediaremote-adapter-macos14"
 ADAPTER_FRAMEWORK="$ADAPTER_BUILD/MediaRemoteAdapter.framework"
 if [ ! -d "$ADAPTER_FRAMEWORK" ]; then
     command -v cmake >/dev/null || { echo "cmake is required to build the media adapter (brew install cmake)"; exit 1; }
-    cmake -S "$ADAPTER_SRC" -B "$ADAPTER_BUILD" -DCMAKE_BUILD_TYPE=Release >/dev/null
+    cmake -S "$ADAPTER_SRC" -B "$ADAPTER_BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 >/dev/null
     cmake --build "$ADAPTER_BUILD" --target MediaRemoteAdapter -j 8 >/dev/null
 fi
 
-# 2. The app.
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/LiveIsland"
+# 2. The app. UNIVERSAL=1 builds for Intel Macs too (releases do).
+ARCHS=()
+[ "${UNIVERSAL:-0}" = 1 ] && ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release "${ARCHS[@]}"
+BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)/LiveIsland"
 
 APP="build/LiveIsland.app"
 rm -rf "$APP"
