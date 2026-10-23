@@ -126,11 +126,14 @@ public struct CodexLimits: Equatable, Sendable {
     public var primary: RateLimitWindow?
     public var secondary: RateLimitWindow?
     public var observedAt: Date
+    /// The rollout of the session that reported them.
+    public var session: String?
 
-    public init(primary: RateLimitWindow?, secondary: RateLimitWindow?, observedAt: Date) {
+    public init(primary: RateLimitWindow?, secondary: RateLimitWindow?, observedAt: Date, session: String? = nil) {
         self.primary = primary
         self.secondary = secondary
         self.observedAt = observedAt
+        self.session = session
     }
 
     public var windows: [RateLimitWindow] { [primary, secondary].compactMap { $0 } }
