@@ -101,18 +101,14 @@ struct AccountTests {
         #expect(mcp?["accessToken"] as? String == "mcp-token")
     }
 
-    @Test func limitsBelongToTheNewAccountOnlyAfterItAnswered() {
+    @Test func onlyASessionStartedAfterTheSwitchIsKnownToUseTheNewAccount() {
         let switched = now
-        // Before any reply on the new login, the status line may still show the old account.
-        #expect(!AccountBook.belongsToActive(observedAt: switched.addingTimeInterval(10), activeSince: switched, latestRequestAt: nil))
-        #expect(!AccountBook.belongsToActive(observedAt: switched.addingTimeInterval(20), activeSince: switched,
-                                             latestRequestAt: switched.addingTimeInterval(15)))
-        // A reply after sessions picked up the new login, then a report after it: that's the new account.
-        let reply = switched.addingTimeInterval(45)
-        #expect(AccountBook.belongsToActive(observedAt: reply.addingTimeInterval(1), activeSince: switched, latestRequestAt: reply))
-        #expect(!AccountBook.belongsToActive(observedAt: reply.addingTimeInterval(-1), activeSince: switched, latestRequestAt: reply))
-        // Never seen a switch: the report is the active account's.
-        #expect(AccountBook.belongsToActive(observedAt: now, activeSince: nil, latestRequestAt: nil))
+        // A session reads the login when it starts and can keep it as long as it runs.
+        #expect(!AccountBook.belongsToActive(sessionStartedAt: switched.addingTimeInterval(-3600), activeSince: switched))
+        #expect(AccountBook.belongsToActive(sessionStartedAt: switched.addingTimeInterval(5), activeSince: switched))
+        #expect(!AccountBook.belongsToActive(sessionStartedAt: nil, activeSince: switched), "unknown session: could be any account")
+        // Never seen a switch: there's only the one account.
+        #expect(AccountBook.belongsToActive(sessionStartedAt: nil, activeSince: nil))
     }
 
     @Test func theBookFollowsTheActiveAccount() throws {
@@ -122,30 +118,29 @@ struct AccountTests {
         book.setActive(a, at: now)
         #expect(book.activeSince == nil, "the first account seen wasn't a switch")
         let limits = ClaudeUsageLimits(fiveHour: RateLimitWindow(usedPercent: 100, windowMinutes: 300, resetsAt: now.addingTimeInterval(3600)),
-                                       sevenDay: RateLimitWindow(usedPercent: 40, windowMinutes: 10_080, resetsAt: nil), observedAt: now)
-        let recorded = book.record(limits, latestRequestAt: nil)
+                                       sevenDay: RateLimitWindow(usedPercent: 40, windowMinutes: 10_080, resetsAt: now.addingTimeInterval(500_000)),
+                                       observedAt: now)
+        let recorded = book.record(limits, sessionStartedAt: nil)
         #expect(recorded)
         #expect(book.entries[a.key]?.fiveHour?.usedPercent == 100)
 
         book.setActive(b, at: now.addingTimeInterval(60))
         #expect(book.activeSince == now.addingTimeInterval(60))
-        let stale = ClaudeUsageLimits(fiveHour: limits.fiveHour, sevenDay: limits.sevenDay, observedAt: now.addingTimeInterval(70))
         // A session still on A's login reports A's numbers after the switch: they go to A, not B.
-        let routed = book.record(stale, latestRequestAt: now.addingTimeInterval(65))
+        let stale = ClaudeUsageLimits(fiveHour: limits.fiveHour, sevenDay: limits.sevenDay, observedAt: now.addingTimeInterval(70))
+        let routed = book.record(stale, sessionStartedAt: now.addingTimeInterval(-600))
         #expect(routed)
         #expect(book.entries[b.key]?.fiveHour == nil, "A's numbers mustn't land on B")
         #expect(book.entries[a.key]?.limitsObservedAt == now.addingTimeInterval(70))
-        // Numbers nobody owns yet wait for a request on B's login.
+        // New numbers from a session that was running before the switch: could be anyone's.
         let fresh = ClaudeUsageLimits(fiveHour: RateLimitWindow(usedPercent: 3, windowMinutes: 300, resetsAt: now.addingTimeInterval(17_000)),
                                       sevenDay: RateLimitWindow(usedPercent: 20, windowMinutes: 10_080, resetsAt: now.addingTimeInterval(400_000)),
                                       observedAt: now.addingTimeInterval(80))
-        let early = book.record(fresh, latestRequestAt: now.addingTimeInterval(75))
-        #expect(!early)
-        let placed = book.record(fresh, latestRequestAt: now.addingTimeInterval(79))
-        #expect(!placed, "a request within 30 s of the switch may still be A's")
-        let later = ClaudeUsageLimits(fiveHour: fresh.fiveHour, sevenDay: fresh.sevenDay, observedAt: now.addingTimeInterval(130))
-        let recordedB = book.record(later, latestRequestAt: now.addingTimeInterval(120))
-        #expect(recordedB)
+        let fromOldSession = book.record(fresh, sessionStartedAt: now.addingTimeInterval(-600))
+        #expect(!fromOldSession)
+        // The same numbers from a session started after the switch: B's.
+        let fromNewSession = book.record(fresh, sessionStartedAt: now.addingTimeInterval(90))
+        #expect(fromNewSession)
         #expect(book.entries[b.key]?.fiveHour?.usedPercent == 3)
         #expect(book.entries[a.key]?.fiveHour?.usedPercent == 100)
 
@@ -162,15 +157,33 @@ struct AccountTests {
         var book = AccountBook()
         book.setActive(a, at: now)
         book.setActive(c, at: now.addingTimeInterval(10))
-        // C never answers: its only news is the refusal, with the weekly reset.
+        // C never answers: its only news is the refusal of a new session, with the weekly reset.
         let resets = now.addingTimeInterval(200_000)
-        book.record(ClaudeLimitNotice(status: "rejected", type: "seven_day", resetsAt: resets, observedAt: now.addingTimeInterval(40)))
+        book.record(ClaudeLimitNotice(status: "rejected", type: "seven_day", resetsAt: resets, observedAt: now.addingTimeInterval(40)),
+                    sessionStartedAt: now.addingTimeInterval(20))
         #expect(book.entries[c.key]?.sevenDay?.usedPercent == 100)
         #expect(book.entries[c.key]?.sevenDay?.resetsAt == resets)
         #expect(book.entries[c.key]?.fiveHour == nil)
-        // A refusal from before the switch isn't C's.
-        book.record(ClaudeLimitNotice(status: "rejected", type: "five_hour", resetsAt: now.addingTimeInterval(9000), observedAt: now.addingTimeInterval(5)))
+        // A refusal in a session that started before the switch isn't known to be C's.
+        book.record(ClaudeLimitNotice(status: "rejected", type: "five_hour", resetsAt: now.addingTimeInterval(9000), observedAt: now.addingTimeInterval(50)),
+                    sessionStartedAt: now)
         #expect(book.entries[c.key]?.fiveHour == nil)
+    }
+
+    /// What happened in use: C (out of room, never measured) → A. A session started while C
+    /// was in use is still on C's login and gets refused after the switch.
+    @Test func aRefusalInAnOlderSessionNeverLandsOnTheNewAccount() throws {
+        let a = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount().utf8)))
+        let b = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount(email: "b@example.com", uuid: "acct-b", org: "org-b").utf8)))
+        let c = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount(email: "c@example.com", uuid: "acct-c", org: "org-c").utf8)))
+        var book = AccountBook()
+        book.setActive(b, at: now)
+        book.setActive(c, at: now.addingTimeInterval(100))
+        book.setActive(a, at: now.addingTimeInterval(200))
+        let refusal = ClaudeLimitNotice(status: "rejected", type: "seven_day", resetsAt: now.addingTimeInterval(70_000),
+                                        observedAt: now.addingTimeInterval(247))
+        book.record(refusal, sessionStartedAt: now.addingTimeInterval(150))
+        #expect(book.entries[a.key]?.sevenDay == nil && book.entries[b.key]?.sevenDay == nil && book.entries[c.key]?.sevenDay == nil)
     }
 
     @Test func aRefusalMatchingAnotherAccountsResetIsThatAccounts() throws {
@@ -180,12 +193,30 @@ struct AccountTests {
         book.setActive(a, at: now)
         let reset = now.addingTimeInterval(3600)
         book.record(ClaudeUsageLimits(fiveHour: RateLimitWindow(usedPercent: 98, windowMinutes: 300, resetsAt: reset), sevenDay: nil, observedAt: now),
-                    latestRequestAt: nil)
+                    sessionStartedAt: nil)
         // Out of room on A, the user moves to B; a session still on A gets refused.
         book.setActive(b, at: now.addingTimeInterval(60))
-        book.record(ClaudeLimitNotice(status: "rejected", type: "five_hour", resetsAt: reset.addingTimeInterval(30), observedAt: now.addingTimeInterval(70)))
+        book.record(ClaudeLimitNotice(status: "rejected", type: "five_hour", resetsAt: reset.addingTimeInterval(30), observedAt: now.addingTimeInterval(70)),
+                    sessionStartedAt: now.addingTimeInterval(-500))
         #expect(book.entries[a.key]?.fiveHour?.usedPercent == 100)
         #expect(book.entries[b.key]?.fiveHour == nil)
+    }
+
+    @Test func readingsFromBeforeTheSessionRuleAreDropped() throws {
+        let a = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount().utf8)))
+        let b = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount(email: "b@example.com", uuid: "acct-b", org: "org-b").utf8)))
+        var book = AccountBook()
+        book.setActive(a, at: now)
+        book.setActive(b, at: now.addingTimeInterval(10))
+        book.entries[a.key]?.sevenDay = RateLimitWindow(usedPercent: 100, windowMinutes: 10_080, resetsAt: now.addingTimeInterval(9000))
+        book.entries[a.key]?.limitsObservedAt = now
+        book.version = nil
+        book.migrate(now: now.addingTimeInterval(20))
+        #expect(book.entries[a.key]?.sevenDay == nil && book.version == AccountBook.currentVersion)
+        // Already current: nothing changes.
+        book.entries[a.key]?.sevenDay = RateLimitWindow(usedPercent: 5, windowMinutes: 10_080, resetsAt: nil)
+        book.migrate(now: now.addingTimeInterval(30))
+        #expect(book.entries[a.key]?.sevenDay?.usedPercent == 5)
     }
 
     @Test func cleansUpNumbersFiledUnderTwoAccounts() throws {

@@ -242,7 +242,9 @@ public struct AccountBook: Codable, Equatable, Sendable {
     /// When the active account last changed; nil when LiveIsland never saw it change.
     public var activeSince: Date?
 
-    public init() {}
+    public init() {
+        version = Self.currentVersion
+    }
 
     /// Notes the account Claude Code is logged in to now.
     public mutating func setActive(_ identity: ClaudeAccountIdentity, at now: Date) {
@@ -256,39 +258,56 @@ public struct AccountBook: Codable, Equatable, Sendable {
         activeKey = identity.key
     }
 
-    /// Files the status line's limits under the account they belong to. Every account's
-    /// windows reset at their own times, so a report whose reset times match an account's is
-    /// that account's, whichever is active: a session still on the previous login reports its
-    /// numbers. Anything else goes to the active account, once a request was made on it.
-    /// Returns false when the report can't be placed yet.
+    /// Files the status line's limits under the account they belong to: the one whose reset
+    /// times they match (every account's windows reset at their own times), or else the
+    /// account in use, when the session that reported them started after the latest switch.
+    /// A session reads the login when it starts and can keep it as long as it runs, so a
+    /// report from an older session could be any account's: it waits. Returns false when the
+    /// report can't be placed yet.
     @discardableResult
-    public mutating func record(_ limits: ClaudeUsageLimits, latestRequestAt: Date?) -> Bool {
+    public mutating func record(_ limits: ClaudeUsageLimits, sessionStartedAt: Date?) -> Bool {
         if let owner = entries.first(where: { Self.sameWindows($0.value, limits) })?.key {
             store(limits, in: owner)
             return true
         }
         guard let key = activeKey, entries[key] != nil,
-              Self.belongsToActive(observedAt: limits.observedAt, activeSince: activeSince, latestRequestAt: latestRequestAt)
+              Self.belongsToActive(sessionStartedAt: sessionStartedAt, activeSince: activeSince)
         else { return false }
         store(limits, in: key)
         return true
     }
 
-    /// A request Claude refused for a limit: the account in use is out of room until the
-    /// notice's reset time. That's the only news an exhausted account ever gives, as it never
-    /// answers. A notice matching another account's reset time is that account's.
-    public mutating func record(_ notice: ClaudeLimitNotice) {
+    /// A request Claude refused for a limit: that account is out of room until the notice's
+    /// reset time. It's the only news an exhausted account ever gives, as it never answers.
+    /// Placed by the same rules as the status line's reports.
+    public mutating func record(_ notice: ClaudeLimitNotice, sessionStartedAt: Date?) {
         let window = RateLimitWindow(usedPercent: 100, windowMinutes: notice.type == "seven_day" ? 10_080 : 300, resetsAt: notice.resetsAt)
         let owner = entries.first { entry in
             let known = window.windowMinutes == 300 ? entry.value.fiveHour : entry.value.sevenDay
             return Self.sameReset(known?.resetsAt, notice.resetsAt)
         }?.key
-        guard let key = owner ?? activeKey, entries[key] != nil else { return }
-        // Only a refusal after the switch can be the new account's.
-        if owner == nil, let activeSince, notice.observedAt < activeSince { return }
+        let active = Self.belongsToActive(sessionStartedAt: sessionStartedAt, activeSince: activeSince) ? activeKey : nil
+        guard let key = owner ?? active, entries[key] != nil else { return }
         if let seen = entries[key]!.limitsObservedAt, seen > notice.observedAt { return }
         if window.windowMinutes == 300 { entries[key]!.fiveHour = window } else { entries[key]!.sevenDay = window }
         entries[key]!.limitsObservedAt = notice.observedAt
+    }
+
+    /// Readings made before version 2 were placed by "a request went out after the switch",
+    /// which a session still on the previous login breaks. They may be another account's.
+    public static let currentVersion = 2
+    public var version: Int?
+
+    public mutating func migrate(now: Date) {
+        guard (version ?? 1) < Self.currentVersion else { return }
+        for key in entries.keys {
+            entries[key]!.fiveHour = nil
+            entries[key]!.sevenDay = nil
+            entries[key]!.limitsObservedAt = nil
+        }
+        // Sessions already running may be on any account; only new ones count.
+        if activeSince == nil, entries.count > 1 { activeSince = now }
+        version = Self.currentVersion
     }
 
     private mutating func store(_ limits: ClaudeUsageLimits, in key: String) {
@@ -298,13 +317,12 @@ public struct AccountBook: Codable, Equatable, Sendable {
         entries[key]!.limitsObservedAt = limits.observedAt
     }
 
-    /// After a switch, sessions keep showing the previous account's numbers until they make a
-    /// request on the new one (they pick up a new login within about 30 seconds). So only a
-    /// report made after a request that came after that counts.
-    public static func belongsToActive(observedAt: Date, activeSince: Date?, latestRequestAt: Date?) -> Bool {
+    /// Whether a session uses the account in use now: only certain when it started after the
+    /// latest switch. With no switch ever seen, there's just the one account.
+    public static func belongsToActive(sessionStartedAt: Date?, activeSince: Date?) -> Bool {
         guard let activeSince else { return true }
-        guard let request = latestRequestAt, request > activeSince.addingTimeInterval(30) else { return false }
-        return observedAt >= request
+        guard let started = sessionStartedAt else { return false }
+        return started > activeSince
     }
 
     /// Same reset times for every window both sides know: the same account. Reset times move
