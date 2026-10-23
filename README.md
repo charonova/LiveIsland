@@ -9,7 +9,7 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-79%20passing-success)
+![Tests](https://img.shields.io/badge/tests-86%20passing-success)
 
 <br>
 
@@ -72,6 +72,7 @@
 **Everyday use**
 - Opens on hover (or click), closes when you move away; clicks pass straight through everywhere else
 - **Your tab order**: put Media, Agents, Activity and Accounts in the order you like (Settings › Island)
+- **Software Update** in Settings: see what's new and update in one click. It checks GitHub once a day (you can turn that off) and never installs on its own
 - Settings window, menu bar panel, Open at Login, `liveisland://` links for Shortcuts
 - Liquid Glass on macOS 26+, with a material fallback on earlier systems
 - On Macs without a notch, the island sits at the top of the screen
@@ -127,6 +128,7 @@ LiveIsland learns a Claude account's limits from the status line while you use i
 | Waveform | A Core Audio process tap on what the Mac plays (macOS 14.2+), only while music plays and the bars are on screen. It only listens: the sound is never changed, muted, recorded or stored, just measured band by band |
 | Battery, AirPods | IOKit power notifications; IOBluetooth and `system_profiler` for AirPods levels |
 | Calendar | EventKit, read only |
+| Updates | This repository's latest GitHub release, at most once a day. A new version must match its SHA-256, be LiveIsland at the version promised and pass `codesign --verify` before it replaces the app |
 
 ## Performance
 
@@ -151,6 +153,8 @@ curl -fL https://github.com/charonova/LiveIsland/releases/latest/download/LiveIs
 ```
 
 LiveIsland isn't notarized by Apple yet (that needs a paid developer account), so a copy downloaded in a browser gets "Apple could not verify LiveIsland" the first time. Installed with the command above, it opens right away. If you downloaded [the zip](https://github.com/charonova/LiveIsland/releases/latest) in a browser, unzip it, move LiveIsland to Applications, open it once, then click **Open Anyway** in **System Settings › Privacy & Security**.
+
+After that, new versions install from **Settings › Software Update**.
 
 **Build it yourself** instead, with the Xcode Command Line Tools and CMake (`brew install cmake`, for the media adapter):
 
@@ -177,7 +181,7 @@ Everything works without any of them; the matching feature just stays empty.
 LIVEISLAND_REAL_DATA=1 ./scripts/test.sh -c release --filter RealData   # read your own transcripts, timed
 ```
 
-The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, the tab order (kept as tabs come and go), timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
+The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, the tab order (kept as tabs come and go), software updates (versions compared number by number, GitHub's release answer, checksums), timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
 
 ## Automation
 
@@ -186,11 +190,12 @@ The tests cover the transcript and rollout parsers, the incremental usage ledger
 | `liveisland://open` · `close` | Open or close the island |
 | `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity` or `accounts` (`accounts/codex` for the Codex list) |
 | `liveisland://timer/5` | Start a 5-minute timer |
-| `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `about` |
+| `liveisland://update` · `update/install` | Check for a new version, and install it |
+| `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `updates`, `about` |
 
 ## Privacy
 
-LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. The waveform measures the sound in memory and never records or keeps it. Its only network request downloads Spotify's cover art, from the address Spotify itself gives.
+LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. The waveform measures the sound in memory and never records or keeps it. Its only network requests download Spotify's cover art, from the address Spotify itself gives, and ask GitHub once a day whether a newer LiveIsland is out (turn that off in Settings › Software Update).
 
 ## Credits
 
