@@ -70,7 +70,7 @@
 - Copy the command that resumes a session
 - **Usage limits as rings**: Claude Code's real 5-hour and weekly percentages (one click to set up, see below), Codex's 5-hour and weekly limits, tokens this window and today
 - Optional sound when an agent finishes or stops to ask you something
-- **Several Claude accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching (see below)
+- **Several Claude and Codex accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching (see below)
 
 **Calls, devices and the rest**
 - Call timer for FaceTime, Zoom, Teams, Discord, WhatsApp, Slack and more
@@ -91,7 +91,7 @@ Claude Code shares its 5-hour and weekly percentages only with its status line. 
 
 Prefer to do it yourself? The lines are in [`scripts/claude-statusline-snippet.sh`](scripts/claude-statusline-snippet.sh). They go inside the status line script; typed into a terminal they do nothing. Without them, the island still shows Claude Code's tokens for the current 5-hour window and for today, counted from its transcripts.
 
-## Claude accounts
+## Claude and Codex accounts
 
 <div align="center">
 <a href="demo/accounts.mp4"><img src="demo/accounts.gif" width="720" alt="The Accounts tab: three Claude accounts with their 5-hour and weekly limits, switching from one to another"></a>
@@ -122,6 +122,8 @@ Choose how switching works in **Settings › AI Agents**:
 
 To add an account, run `/login` in Claude Code and sign in to it (a private browser window helps if you're signed in to claude.ai as someone else). Avoid `/logout`: it can cancel the saved login of the account you leave. Use one switcher at a time, since each keeps its own copy of every login.
 
+**Codex accounts** work the same way: the Accounts page has a Claude Code | Codex switch, and **Settings › AI Agents** has *Switch Codex accounts with LiveIsland* (off by default). LiveIsland then keeps a copy of each Codex login in its own folder, readable only by you, the same way Codex keeps its own in `~/.codex/auth.json`, and puts it in place when you tap Switch. Codex refuses to save a refreshed login over another account's, so a running session can't undo a switch. Add accounts with `codex login`; avoid `codex logout`, which cancels the login.
+
 LiveIsland learns an account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request. Each report names the session it came from, and a session keeps the login it started with, so numbers land on an account only when that's certain: the session started after the latest switch, or the numbers match that account's own reset times. An account you aren't using keeps its last numbers, and a window that has reset counts from zero. (Added the status line lines with an earlier version? Settings › AI Agents offers to update them.)
 
 ## How it works
@@ -133,6 +135,7 @@ LiveIsland learns an account's limits from the status line while you use it, and
 | Claude Code and Codex | Their session files (`~/.claude/projects`, `~/.codex/sessions`), watched with FSEvents. Transcripts can be gigabytes, so only new bytes are read |
 | Where a session runs | The process table: each agent's folder and terminal, and the app above it |
 | Claude accounts | Who's logged in from `~/.claude.json`; logins (only when you choose LiveIsland switching) through the system `security` tool, the way Claude Code itself stores them |
+| Codex accounts | Who's logged in, and the plan, from `~/.codex/auth.json`; limits from the `rate_limits` Codex writes in each session |
 | Microphone, camera, calls | Core Audio's process list and CoreMediaIO. Only *whether* they're in use, never what they hear or see |
 | Battery, AirPods | IOKit power notifications; IOBluetooth and `system_profiler` for AirPods levels |
 | Calendar | EventKit, read only |
