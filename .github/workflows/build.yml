@@ -11,7 +11,7 @@ jobs:
     # Liquid Glass needs the macOS 26 SDK or later.
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Test
         run: ./scripts/test.sh
@@ -23,7 +23,7 @@ jobs:
       - name: Package
         run: ditto -c -k --keepParent build/LiveIsland.app LiveIsland.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: LiveIsland
           path: LiveIsland.zip
