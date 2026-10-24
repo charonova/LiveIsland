@@ -9,7 +9,7 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-86%20passing-success)
+![Tests](https://img.shields.io/badge/tests-112%20passing-success)
 
 <br>
 
@@ -59,6 +59,7 @@
 - Copy the command that resumes a session
 - **Usage limits as rings**: Claude Code's real 5-hour and weekly percentages (one click to set up, see below), Codex's 5-hour and weekly limits, tokens this window and today
 - Optional sound when an agent finishes or stops to ask you something
+- **Tasks that keep going** (Settings › Tasks): start a Claude Code task and leave. When its account hits a usage limit, it continues from where it stopped once the limit resets, or, if you turn it on, on another of your own accounts. It pauses for you whenever something needs your approval
 - **Several Claude and Codex accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching, also from the menu bar (see below)
 
 **Calls, devices and the rest**
@@ -128,6 +129,7 @@ LiveIsland learns a Claude account's limits from the status line while you use i
 | Waveform | A Core Audio process tap on what the Mac plays (macOS 14.2+), only while music plays and the bars are on screen. It only listens: the sound is never changed, muted, recorded or stored, just measured band by band |
 | Battery, AirPods | IOKit power notifications; IOBluetooth and `system_profiler` for AirPods levels |
 | Calendar | EventKit, read only |
+| Tasks | `claude -p` with stream-json output, in the task's folder and permission mode. Each account is a Claude Code profile (`CLAUDE_CONFIG_DIR`) that Claude Code itself signs in to with `claude auth login`; LiveIsland keeps only the profile's folder, email and plan. A usage limit and its reset time come from the `rate_limit_info` Claude Code writes in the transcript. A run continues the same conversation with `--resume`, by session ID on the same account and by the transcript's path on another, and never starts while another `claude` process has that conversation open |
 | Updates | This repository's latest GitHub release, at most once a day. A new version must match its SHA-256, be LiveIsland at the version promised and pass `codesign --verify` before it replaces the app |
 
 ## Performance
@@ -181,7 +183,7 @@ Everything works without any of them; the matching feature just stays empty.
 LIVEISLAND_REAL_DATA=1 ./scripts/test.sh -c release --filter RealData   # read your own transcripts, timed
 ```
 
-The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, the tab order (kept as tabs come and go), software updates (versions compared number by number, GitHub's release answer, checksums), timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
+The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, the tab order (kept as tabs come and go), software updates (versions compared number by number, GitHub's release answer, checksums), tasks (how a run ended: a usage limit with or without a reset time, throttling, network, signing in, approvals; the account chosen next, never one known to be out; waiting for the earliest reset; cancelling; one run per conversation; the checkpoint and the prompts that continue from it), timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
 
 ## Automation
 
@@ -191,11 +193,11 @@ The tests cover the transcript and rollout parsers, the incremental usage ledger
 | `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity` or `accounts` (`accounts/codex` for the Codex list) |
 | `liveisland://timer/5` | Start a 5-minute timer |
 | `liveisland://update` · `update/install` | Check for a new version, and install it |
-| `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `updates`, `about` |
+| `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `tasks`, `updates`, `about` |
 
 ## Privacy
 
-LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. The waveform measures the sound in memory and never records or keeps it. Its only network requests download Spotify's cover art, from the address Spotify itself gives, and ask GitHub once a day whether a newer LiveIsland is out (turn that off in Settings › Software Update).
+LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. The waveform measures the sound in memory and never records or keeps it. Its only network requests download Spotify's cover art, from the address Spotify itself gives, and ask GitHub once a day whether a newer LiveIsland is out (turn that off in Settings › Software Update). Tasks run Claude Code on your Mac with your own accounts; their checkpoints stay in `~/Library/Application Support/LiveIsland/automation`, and runs never get an API key or token from LiveIsland's environment, so nothing is billed to an API key behind your back.
 
 ## Credits
 
