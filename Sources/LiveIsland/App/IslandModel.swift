@@ -110,8 +110,6 @@ final class IslandModel: ObservableObject {
         didSet {
             save(liveWaveform, Key.waveform)
             levels.isEnabled = liveWaveform
-        updater.checksAutomatically = checkForUpdates
-        updater.start()
         }
     }
     /// How LiveIsland switches Claude accounts, if at all. Off until the user picks one.
@@ -189,6 +187,8 @@ final class IslandModel: ObservableObject {
         media.start()
         volume.start()
         levels.isEnabled = liveWaveform
+        updater.checksAutomatically = checkForUpdates
+        updater.start()
         accountsMonitor.onUpdate = { [weak self] in self?.accountsState = $0 }
         accountsMonitor.mode = accountSwitching
         accountsMonitor.codexSwitching = codexSwitching
