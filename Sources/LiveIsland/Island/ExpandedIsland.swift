@@ -11,11 +11,19 @@ struct ExpandedIsland: View {
     let layout: IslandLayout
 
     var body: some View {
+        // The camera housing hides whatever is under it: the tabs and the status each get the
+        // room beside the notch, and the tabs drop their label when it wouldn't fit there.
+        let width = layout.size(expanded: true, active: true).width
+        let wing = max(0, (width - layout.notch.width) / 2 - 18 - 6)
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                TabBar(namespace: tabs)
-                Spacer(minLength: layout.notch.width + 16)
-                StatusStrip()
+                ViewThatFits(in: .horizontal) {
+                    TabBar(namespace: tabs, labels: true)
+                    TabBar(namespace: tabs, labels: false)
+                }
+                .frame(width: wing, alignment: .leading)
+                Spacer(minLength: 0)
+                StatusStrip().frame(width: wing, alignment: .trailing)
             }
             .padding(.horizontal, 18)
             .frame(height: max(layout.notch.height, 32))
@@ -44,6 +52,8 @@ struct ExpandedIsland: View {
 private struct TabBar: View {
     @EnvironmentObject private var model: IslandModel
     let namespace: Namespace.ID
+    /// Show the selected tab's name (icons only when there's no room).
+    var labels = true
 
     var body: some View {
         HStack(spacing: 2) {
@@ -54,11 +64,11 @@ private struct TabBar: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: tab.symbol).font(.system(size: 11, weight: .semibold))
-                        if selected {
+                        if selected && labels {
                             Text(tab.rawValue).font(.system(size: 11, weight: .semibold, design: .rounded)).fixedSize()
                         }
                     }
-                    .padding(.horizontal, selected ? 10 : 8)
+                    .padding(.horizontal, selected ? 9 : 6.5)
                     .frame(height: 24)
                     .foregroundStyle(selected ? Color.white : .white.opacity(0.5))
                     .background {
@@ -97,14 +107,23 @@ private struct StatusStrip: View {
     @EnvironmentObject private var model: IslandModel
 
     var body: some View {
+        // With five tabs beside a wide notch, room can run short: drop the percentage, never wrap.
+        ViewThatFits(in: .horizontal) {
+            strip(percent: true)
+            strip(percent: false)
+        }
+    }
+
+    private func strip(percent: Bool) -> some View {
         HStack(spacing: 9) {
             if model.system.cameraOn { Circle().fill(.green).frame(width: 6, height: 6).help("Camera in use") }
             if !model.system.microphoneApps.isEmpty { Circle().fill(.orange).frame(width: 6, height: 6).help("Microphone in use") }
             if let battery = model.system.battery {
                 HStack(spacing: 5) {
-                    Text("\(battery.percent)%").monospacedDigit()
+                    if percent { Text("\(battery.percent)%").monospacedDigit() }
                     BatteryGlyph(percent: battery.percent, charging: battery.isCharging || battery.onPower)
                 }
+                .help("\(battery.percent)%")
             }
             TimelineView(.everyMinute) { context in
                 Text(context.date, format: .dateTime.hour().minute())
@@ -116,6 +135,8 @@ private struct StatusStrip: View {
             .buttonStyle(PressableStyle())
             .help("Settings")
         }
+        .lineLimit(1)
+        .fixedSize()
         .font(.system(size: 11, weight: .semibold, design: .rounded))
         .foregroundStyle(.white.opacity(0.75))
     }

@@ -9,7 +9,7 @@ struct IslandLayout: Equatable {
     var screenTop: CGFloat
 
     static let wingWidth: CGFloat = 72
-    static let expandedSize = CGSize(width: 640, height: 300)
+    static let expandedSize = CGSize(width: 680, height: 300)
     /// The window is always this big; everything outside the island is transparent and click-through.
     static let canvas = CGSize(width: 760, height: 370)
 
@@ -29,7 +29,7 @@ struct IslandLayout: Equatable {
 
     func size(expanded: Bool, active: Bool) -> CGSize {
         if expanded {
-            return CGSize(width: max(Self.expandedSize.width, notch.width + 420), height: Self.expandedSize.height)
+            return CGSize(width: max(Self.expandedSize.width, notch.width + 440), height: Self.expandedSize.height)
         }
         if active { return CGSize(width: notch.width + 2 * Self.wingWidth, height: notch.height) }
         // Idle: exactly the notch, so it disappears into it. Without a notch, nothing at all.
