@@ -115,6 +115,49 @@ To add an account, run `/login` in Claude Code and sign in to it (a private brow
 
 LiveIsland learns a Claude account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request; a Codex account's come from the limits Codex writes in each session. Each report names the session it came from, and a session keeps the login it started with, so numbers land on an account only when that's certain: the session started after the latest switch, or the numbers match that account's own reset times. An account you aren't using keeps its last numbers, and a window that has reset counts from zero. (Added the status line lines with an earlier version? Settings › AI Agents offers to update them.)
 
+## Tasks that keep going
+
+<table>
+  <tr>
+    <td align="center" width="45%">
+      <img src="demo/settings-tasks.png" alt="Settings, Tasks page: the switches to continue after a limit and to use other accounts, four accounts in order with their reset times, and the New task form"><br>
+      <sub><b>Settings › Tasks</b><br>The switches, your accounts in order, a new task</sub>
+    </td>
+    <td align="center" width="55%">
+      <img src="demo/tasks-list.png" alt="Three tasks: one waiting for its account's weekly limit to reset, one paused because a step needs approval, one done after moving to another account"><br>
+      <sub><b>Each task</b><br>Where it stands, why, and what happens next</sub>
+    </td>
+  </tr>
+</table>
+
+Start a Claude Code task from **Settings › Tasks**, leave your Mac on, and LiveIsland keeps it going. When the account it runs on hits its 5-hour or weekly limit, the task picks up where it stopped once the limit resets, or, if you allow it, right away on another of your accounts.
+
+**Set it up**
+
+1. **Accounts.** *Main* is the account plain `claude` uses (`~/.claude`). To add another, type a name and click **Add and Sign In**: Terminal opens on Claude Code's own `claude auth login` for a new folder in `~/.claude-accounts`, and the row fills in once you've signed in. Turn each account on or off for tasks, and use the arrows to set the order they're used in.
+2. **Switches.** **Continue tasks after a usage limit** waits for the reset; **Use my other accounts** moves to the next account with room instead. Both stay off until you turn them on.
+3. **A task.** Choose the project folder, describe the work, pick the permissions (*Accept edits*, *Auto*, or *Ask*) and the account to start on, then click **Start Task**.
+
+**When a run stops**
+
+| The run ended because… | LiveIsland… |
+|---|---|
+| it finished | marks the task Done |
+| the account hit its 5-hour or weekly limit | notes when that account resets, from Claude Code's own record of the refusal, then continues on the next account with room, or waits for the earliest reset. It never retries an account it knows is out |
+| Anthropic was busy or unreachable | tries again on the same account, waiting a little longer each time |
+| the account needs signing in again | sets it aside and moves on, or asks you to sign in |
+| a step needed an approval nobody could give | pauses the task as **Needs you**, naming the step |
+| you paused or cancelled it | stops. A cancelled task never starts again |
+
+A task continues the same conversation with `claude --resume`: by its session on the same account, and by its transcript file on another, since each account keeps its own session list. If a conversation can't be resumed, a new one starts, briefed from the task's checkpoint (the files it changed, its last command and whether it passed, its last message), and the task says so. Before every run, LiveIsland checks that no other `claude` process has the conversation open, so a task never runs twice. Each task has **Pause**, **Cancel**, **Resume**, **Continue Now** and **Switch Account**.
+
+**Good to know**
+
+- LiveIsland never sees a login: each account's sign-in stays in Claude Code's own Keychain entry for its folder. Runs get no API key or token from LiveIsland, so nothing is billed to an API key, and LiveIsland never turns on extra usage.
+- Tasks run as `claude -p` in the folder you chose, with the permissions you picked. A step outside them pauses the task; it never asks for more.
+- Only tasks started here keep going. For sessions you run yourself in Terminal or an editor, Claude Code can wait for the reset on its own: turn on *Continue automatically at usage limit* in `/config`. Claude Desktop isn't supported.
+- Anthropic doesn't say whether switching your own accounts automatically is allowed. Its Consumer Terms forbid "bypassing any of our systems or protective measures", and Claude Code's limits assume "ordinary, individual usage". Decide for yourself before turning on **Use my other accounts**.
+
 ## How it works
 
 | What | Where it comes from |
@@ -175,6 +218,10 @@ macOS will ask for:
 - Nothing for Claude or Codex accounts: switching is off until you turn it on, the Keychain items it uses are written by the system `security` tool, and Codex logins are plain files in LiveIsland's own folder
 
 Everything works without any of them; the matching feature just stays empty.
+
+## Updates
+
+**Settings › Software Update** shows the version you have, and whether a newer one is out on GitHub with what's new. **Update Now** downloads it, checks it (its SHA-256, that it's LiveIsland at the version promised, and its signature), puts it in place of the running app and reopens it. LiveIsland looks for a new version once a day; turn that off on the same page. Until LiveIsland is notarized by Apple, macOS may ask again for its permissions after an update.
 
 ## Tests
 
