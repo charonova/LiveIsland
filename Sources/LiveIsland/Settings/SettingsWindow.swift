@@ -3,7 +3,7 @@ import LiveIslandCore
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, island, media, agents, updates, about
+    case general, island, media, agents, tasks, updates, about
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return "Island"
         case .media: return "Media"
         case .agents: return "AI Agents"
+        case .tasks: return "Tasks"
         case .updates: return "Software Update"
         case .about: return "About"
         }
@@ -24,6 +25,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return "capsule.fill"
         case .media: return "music.note"
         case .agents: return "sparkles"
+        case .tasks: return "checklist"
         case .updates: return "arrow.triangle.2.circlepath"
         case .about: return "info"
         }
@@ -35,6 +37,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return .indigo
         case .media: return .pink
         case .agents: return .orange
+        case .tasks: return .green
         case .updates: return .teal
         case .about: return .blue
         }
@@ -107,6 +110,7 @@ struct SettingsView: View {
                 case .island: IslandPage()
                 case .media: MediaSettingsPage()
                 case .agents: AgentsSettingsPage()
+                case .tasks: TasksSettingsPage()
                 case .updates: SoftwareUpdatePage(updater: model.updater)
                 case .about: AboutPage()
                 }
@@ -609,6 +613,249 @@ private struct AboutUpdateLine: View {
             Button("Version \(release.version.description) is available") { model.openSettings(.updates) }
                 .buttonStyle(.link).font(.system(size: 12))
         }
+    }
+}
+
+/// Claude Code tasks that keep going after a usage limit.
+private struct TasksSettingsPage: View {
+    @EnvironmentObject private var model: IslandModel
+
+    var body: some View {
+        Form {
+            Section { PageHeader(section: .tasks, detail: "Claude Code tasks that keep going on their own: after a usage limit resets, or on another of your accounts.") }
+            TaskAutomationSections(runner: model.taskRunner, profiles: model.profileStore)
+        }
+    }
+}
+
+/// Tasks that keep going after a usage limit: the switches, the accounts they may use, a form
+/// to start one, and each task's state with its controls.
+private struct TaskAutomationSections: View {
+    @EnvironmentObject private var model: IslandModel
+    @ObservedObject var runner: TaskRunner
+    @ObservedObject var profiles: ProfileStore
+
+    var body: some View {
+        Group {
+            Section {
+                ToggleRow(symbol: "arrow.clockwise.circle.fill", tint: .green, title: "Continue tasks after a usage limit",
+                          detail: "A task started below picks up again by itself when its account's limit resets, from where it stopped.",
+                          isOn: $model.keepTasksGoing)
+                ToggleRow(symbol: "person.2.circle.fill", tint: .orange, title: "Use my other accounts",
+                          detail: "When the task's account runs out, continue on the next account below that has room, instead of waiting.",
+                          isOn: $model.switchAccountsForTasks)
+                    .disabled(!model.keepTasksGoing)
+                Text("Anthropic's Consumer Terms forbid “bypassing any of our systems or protective measures”, and Claude Code's limits assume “ordinary, individual usage”. Anthropic doesn't say whether switching your own accounts automatically counts; if it decides it does, it could act on these accounts. LiveIsland only uses accounts you signed in to here through Claude Code itself, never touches their logins, and never turns on extra usage or an API key.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("Keep tasks going")
+            }
+            Section {
+                ForEach(Array(profiles.profiles.enumerated()), id: \.element.id) { index, profile in
+                    ProfileRow(profiles: profiles, profile: profile, index: index)
+                }
+                HStack {
+                    TextField("Name for another account", text: $profiles.newName)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { profiles.add() }
+                    Button("Add and Sign In") { profiles.add() }
+                        .disabled(profiles.newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            } header: {
+                Text("Accounts for tasks")
+            } footer: {
+                Text("Each account is its own Claude Code folder (Main is ~/.claude), signed in with `claude auth login` in Terminal. Claude Code keeps the login in your Keychain; LiveIsland only remembers the email and plan it reports. Tasks use them from the top down.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Section {
+                LabeledContent("Project") {
+                    HStack {
+                        Text(runner.draftFolder.isEmpty ? "None" : (runner.draftFolder as NSString).abbreviatingWithTildeInPath)
+                            .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                        Button("Choose…") { runner.chooseFolder() }
+                    }
+                }
+                TextField("What should Claude Code do?", text: $runner.draftObjective, axis: .vertical)
+                    .lineLimit(3...8)
+                Picker("Permissions", selection: $runner.draftMode) {
+                    Text("Accept edits").tag("acceptEdits")
+                    Text("Auto").tag("auto")
+                    Text("Ask (pause when something needs approval)").tag("default")
+                }
+                Picker("Start on", selection: $runner.draftProfile) {
+                    ForEach(profiles.profiles) { Text($0.name).tag($0.id) }
+                }
+                HStack {
+                    if let problem = runner.draftProblem {
+                        Text(problem).font(.system(size: 11)).foregroundStyle(.red)
+                    }
+                    Spacer()
+                    Button("Start Task") { runner.createFromDraft() }.glassButton(prominent: true)
+                }
+            } header: {
+                Text("New task")
+            } footer: {
+                Text("The task runs as `claude -p` in that folder, with these permissions. Nobody is there to approve anything new, so a step that needs approval pauses the task for you.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            if !runner.tasks.isEmpty {
+                Section("Tasks") {
+                    ForEach(runner.tasks) { task in
+                        TaskRow(runner: runner, profiles: profiles, task: task)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// An account for tasks: on or off, its place in the order, and what LiveIsland knows of it.
+private struct ProfileRow: View {
+    @ObservedObject var profiles: ProfileStore
+    let profile: ClaudeProfile
+    let index: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle("", isOn: Binding(get: { profile.enabled }, set: { profiles.setEnabled(profile.id, $0) }))
+                .labelsHidden().toggleStyle(.switch).controlSize(.mini)
+                .help("Tasks may move to this account")
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(profile.name).font(.system(size: 13, weight: .semibold))
+                    if let plan = profile.plan {
+                        Text(plan).font(.system(size: 10, weight: .semibold)).padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(.quaternary))
+                    }
+                }
+                Text(status).font(.system(size: 11)).foregroundStyle(statusColor).lineLimit(2)
+            }
+            Spacer()
+            if profile.unusable != nil {
+                Button("Sign In") { profiles.signIn(profile) }
+            }
+            Menu {
+                Button("Check Sign-In") { Task { await profiles.refresh(profile.id) } }
+                Button("Sign In Again") { profiles.signIn(profile) }
+                if profile.id != ClaudeProfile.mainID {
+                    Divider()
+                    Button("Remove from LiveIsland") { profiles.remove(profile.id) }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton).fixedSize()
+            Button { profiles.move(profile.id, by: -1) } label: { Image(systemName: "chevron.up") }
+                .disabled(index == 0).help("Use earlier")
+            Button { profiles.move(profile.id, by: 1) } label: { Image(systemName: "chevron.down") }
+                .disabled(index == profiles.profiles.count - 1).help("Use later")
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private var status: String {
+        let now = Date()
+        if let reason = profile.unusable { return reason }
+        if let other = profiles.duplicate(of: profile) { return "\(profile.email ?? "") · same account as \(other.name)" }
+        let who = [profile.email, profile.configDir.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "~/.claude"]
+            .compactMap { $0 }.joined(separator: " · ")
+        if let until = profile.exhaustedUntil, until > now { return "Out of usage until \(TaskTime.text(until)) · \(who)" }
+        if let since = profile.exhaustedSince, now.timeIntervalSince(since) < AccountRotation.unknownResetRetry {
+            return "Out of usage, reset time not reported · tried again at \(TaskTime.text(since.addingTimeInterval(AccountRotation.unknownResetRetry)))"
+        }
+        return "Ready · \(who)"
+    }
+
+    private var statusColor: Color {
+        if profile.unusable != nil || profiles.duplicate(of: profile) != nil { return .red }
+        if AccountRotation.isAvailable(profile, at: Date()) { return .secondary }
+        return .orange
+    }
+}
+
+/// A task: what it does, where it stands and why, what happens next, and the controls.
+private struct TaskRow: View {
+    @ObservedObject var runner: TaskRunner
+    @ObservedObject var profiles: ProfileStore
+    let task: AutomationTask
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                badge
+                Text(task.objective).font(.system(size: 13, weight: .semibold)).lineLimit(2)
+                Spacer()
+            }
+            Text(details).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3)
+            HStack(spacing: 8) {
+                switch task.state {
+                case .running:
+                    Button("Pause") { runner.pause(task.id) }
+                    Button("Cancel") { runner.cancel(task.id) }
+                    switchMenu
+                case .waiting:
+                    Button("Continue Now") { runner.resume(task.id) }
+                    Button("Pause") { runner.pause(task.id) }
+                    Button("Cancel") { runner.cancel(task.id) }
+                    switchMenu
+                case .paused, .needsYou:
+                    Button("Resume") { runner.resume(task.id) }
+                    Button("Cancel") { runner.cancel(task.id) }
+                    switchMenu
+                case .done, .cancelled:
+                    Button("Remove") { runner.remove(task.id) }
+                }
+                Spacer()
+                Button("Show Folder") { NSWorkspace.shared.open(URL(fileURLWithPath: task.folder)) }
+            }
+            .controlSize(.small)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private var switchMenu: some View {
+        Menu("Switch Account") {
+            ForEach(profiles.profiles.filter { $0.id != task.profileID }) { profile in
+                Button(profile.name) { runner.switchAccount(task.id, to: profile.id) }
+            }
+        }
+        .fixedSize()
+    }
+
+    private var badge: some View {
+        let (label, color): (String, Color) = {
+            switch task.state {
+            case .running: return ("Running", .green)
+            case .waiting: return ("Waiting", .orange)
+            case .paused: return ("Paused", .gray)
+            case .needsYou: return ("Needs you", .yellow)
+            case .done: return ("Done", .green)
+            case .cancelled: return ("Cancelled", .gray)
+            }
+        }()
+        return Text(label).font(.system(size: 10, weight: .bold)).foregroundStyle(color)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Capsule().fill(color.opacity(0.15)))
+    }
+
+    private var details: String {
+        var parts = [(task.folder as NSString).abbreviatingWithTildeInPath, profiles.name(of: task.profileID)]
+        if task.attempts.count > 1 { parts.append("run \(task.attempts.count)") }
+        var text = parts.joined(separator: " · ") + "\n" + task.reason
+        if task.state == .waiting, let next = task.nextAttemptAt {
+            text += " · next: \(TaskTime.text(next)) on \(profiles.name(of: task.profileID))"
+        }
+        if task.attempts.last?.kind == "handoff" { text += " · new conversation from saved progress" }
+        return text
+    }
+}
+
+/// Times for tasks and accounts, with their time zone, so a reset isn't misread.
+enum TaskTime {
+    static func text(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm zzz" : "EEE d MMM, HH:mm zzz"
+        return formatter.string(from: date)
     }
 }
 

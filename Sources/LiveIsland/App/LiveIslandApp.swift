@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// liveisland:// links, e.g. from Shortcuts: open[/media|agents|activity|accounts[/claude|codex]], close,
-    /// settings[/general|island|media|agents|updates|about], update[/install], timer/<minutes>.
+    /// settings[/general|island|media|agents|tasks|updates|about], update[/install], timer/<minutes>.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme == "liveisland" {
             Logger(subsystem: "com.aissam.liveisland", category: "url").notice("Open \(url.absoluteString, privacy: .public)")

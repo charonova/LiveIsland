@@ -94,6 +94,20 @@ final class IslandModel: ObservableObject {
     @Published var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
     @Published var ambientGlow: Bool { didSet { save(ambientGlow, Key.glow) } }
     @Published var agentSounds: Bool { didSet { save(agentSounds, Key.sounds) } }
+    /// Tasks started from Settings continue on their own after a usage limit, at its reset.
+    @Published var keepTasksGoing: Bool {
+        didSet {
+            save(keepTasksGoing, Key.keepTasksGoing)
+            taskRunner.keepGoing = keepTasksGoing
+        }
+    }
+    /// …and move to another of the person's accounts when the task's own runs out.
+    @Published var switchAccountsForTasks: Bool {
+        didSet {
+            save(switchAccountsForTasks, Key.switchAccountsForTasks)
+            taskRunner.switching = switchAccountsForTasks
+        }
+    }
     /// Whether LiveIsland asks GitHub once a day for a newer version (it never installs on its own).
     @Published var checkForUpdates: Bool {
         didSet {
@@ -138,6 +152,8 @@ final class IslandModel: ObservableObject {
     let volume = OutputVolume()
     let levels = AudioLevelMeter()
     let updater = Updater()
+    let profileStore = ProfileStore()
+    lazy var taskRunner = TaskRunner(profiles: profileStore)
     private let accountsMonitor = AccountsMonitor()
     private let scripted = ScriptedPlayers()
     private let agentMonitor = AgentMonitor()
@@ -155,7 +171,8 @@ final class IslandModel: ObservableObject {
         defaults.register(defaults: [Key.media: true, Key.agents: true, Key.calls: true, Key.devices: true,
                                      Key.calendar: true, Key.claude: true, Key.codex: true, Key.hover: true,
                                      Key.hoverDelay: 0.12, Key.glow: true, Key.sounds: false, Key.players: true,
-                                     Key.waveform: true, Key.updates: true])
+                                     Key.waveform: true, Key.updates: true, Key.keepTasksGoing: false,
+                                     Key.switchAccountsForTasks: false])
         showMedia = defaults.bool(forKey: Key.media)
         showAgents = defaults.bool(forKey: Key.agents)
         showCalls = defaults.bool(forKey: Key.calls)
@@ -169,6 +186,8 @@ final class IslandModel: ObservableObject {
         agentSounds = defaults.bool(forKey: Key.sounds)
         liveWaveform = defaults.bool(forKey: Key.waveform)
         checkForUpdates = defaults.bool(forKey: Key.updates)
+        keepTasksGoing = defaults.bool(forKey: Key.keepTasksGoing)
+        switchAccountsForTasks = defaults.bool(forKey: Key.switchAccountsForTasks)
         tabOrder = Ordering.restore(defaults.stringArray(forKey: Key.tabOrder) ?? [], all: IslandTab.allCases, name: \.rawValue)
         controlPlayers = defaults.bool(forKey: Key.players)
         accountSwitching = defaults.string(forKey: Key.switching).flatMap(AccountsMonitor.Switching.init(rawValue:)) ?? .off
@@ -189,6 +208,9 @@ final class IslandModel: ObservableObject {
         levels.isEnabled = liveWaveform
         updater.checksAutomatically = checkForUpdates
         updater.start()
+        taskRunner.keepGoing = keepTasksGoing
+        taskRunner.switching = switchAccountsForTasks
+        taskRunner.start()
         accountsMonitor.onUpdate = { [weak self] in self?.accountsState = $0 }
         accountsMonitor.mode = accountSwitching
         accountsMonitor.codexSwitching = codexSwitching
@@ -207,6 +229,7 @@ final class IslandModel: ObservableObject {
         volume.stop()
         levels.stop()
         updater.stop()
+        taskRunner.stop()
         accountsMonitor.stop()
         scripted.stop()
         agentMonitor.stop()
@@ -638,6 +661,8 @@ final class IslandModel: ObservableObject {
         static let waveform = "liveWaveform"
         static let tabOrder = "tabOrder"
         static let updates = "checkForUpdates"
+        static let keepTasksGoing = "keepTasksGoing"
+        static let switchAccountsForTasks = "switchAccountsForTasks"
         static let switching = "accountSwitching"
         static let codexSwitching = "codexSwitching"
     }
