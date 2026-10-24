@@ -1,10 +1,12 @@
 <div align="center">
 
-<img src="docs/icon.png" width="160" alt="LiveIsland icon">
+<img src="docs/icon.png" width="150" alt="LiveIsland icon">
 
 # LiveIsland
 
-**A Dynamic Island for the Mac's notch: what's playing, your AI agents and their limits, calls, AirPods, timers and your calendar.**
+### Your Claude Code work doesn't stop at a usage limit.
+
+**A Dynamic Island for the Mac's notch that keeps your Claude Code tasks going across your accounts, and shows what's playing, who's working, and how much room each account has left.**
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
@@ -13,20 +15,46 @@
 
 <br>
 
-<img src="demo/island-media.png" width="720" alt="The Media page: Spotify's track with its cover glow, a live waveform beside the title, scrubber, controls and volume">
+<img src="demo/island-tasks.png" width="760" alt="The island's Tasks tab: one task moved from Main to Work when Main ran out and is working, one tries again while Anthropic is busy, one waits for an approval; beside them, three accounts with when each resets">
 
-<img src="demo/island-split.png" width="560" alt="The closed island shared by two things: Claude Code on the left, the music's waveform on the right">
+<sub>Main ran out, so the first task moved to Work and kept going. One task tries again while Anthropic is busy, one waits for your approval.</sub>
 
-<sub>The Media page with its live waveform, and the notch shared by Claude Code and the music, like the iPhone's.</sub>
+**[Install](#install)** · **[How tasks keep going](#tasks-that-keep-going)** · **[Screenshots](#screenshots)** · **[Features](#features)**
 
 </div>
 
 ---
 
+## The problem
+
+You hand Claude Code a long job and walk away. Forty minutes later it has stopped:
+
+> You've hit your session limit · resets 3:45pm
+
+Nothing happens until you come back, sign in to another account and type "continue", and then explain where it was. If you pay for more than one account, the others sit idle the whole time. And the notch, a black bar in the middle of your screen, tells you none of this.
+
+## The solution
+
+LiveIsland turns the notch into a Dynamic Island that keeps an eye on your work for you.
+
+- **Tasks keep going.** When the account a task runs on hits its 5-hour or weekly limit, LiveIsland continues the *same conversation*: as soon as the limit resets, or right away on the next of your accounts that has room. No signing in, no "continue", nothing to explain again.
+- **Everything at a glance.** Which agent is working or waiting for you, how much of each account's limits is left and when it resets, what's playing, with a waveform that moves to the music.
+- **It stays out of the way.** It opens on hover, clicks pass straight through, and it uses under 1% of one core when closed.
+
+### Three steps
+
+| 1. Sign in once | 2. Start a task | 3. Walk away |
+|---|---|---|
+| Add your accounts in **Settings › Tasks**. Claude Code signs in to each one itself, and LiveIsland never sees a login | Pick the project folder, say what to do, choose its permissions | When an account runs out, the task moves on or waits for the reset. Follow it from the island's **Tasks** tab |
+
 ## Screenshots
 
 <table>
   <tr>
+    <td align="center" width="33%">
+      <img src="demo/island-media.png" alt="Media page: Spotify's track with its cover glow, a live waveform beside the title, scrubber, controls and volume"><br>
+      <sub><b>Media</b><br>Any player, a real waveform, glow from the cover</sub>
+    </td>
     <td align="center" width="33%">
       <img src="demo/island-agents.png" alt="Agents page: Claude Code sessions with states, and rings for the 5-hour and weekly limits of Claude Code and Codex"><br>
       <sub><b>Agents</b><br>Sessions, states, real usage limits</sub>
@@ -35,8 +63,16 @@
       <img src="demo/island-activity.png" alt="Activity page: timer presets, calendar, battery, AirPods, microphone and camera tiles"><br>
       <sub><b>Activity</b><br>Timer, calendar, battery, devices, privacy</sub>
     </td>
-    <td align="center" width="33%">
-      <img src="demo/settings-agents.png" alt="Settings window, AI Agents page: agent toggles, sound, and how to switch Claude accounts"><br>
+  </tr>
+  <tr>
+    <td align="center" colspan="3">
+      <img src="demo/island-split.png" width="560" alt="The closed island shared by two things: Claude Code on the left, the music's waveform on the right"><br>
+      <sub><b>In the notch</b><br>Claude and the music share it, like the iPhone</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3">
+      <img src="demo/settings-agents.png" width="560" alt="Settings window, AI Agents page: agent toggles, sound, and how to switch Claude accounts"><br>
       <sub><b>Settings</b><br>Everything, in one window</sub>
     </td>
   </tr>
@@ -44,11 +80,17 @@
 
 ## Features
 
+**Tasks that keep going**
+- Start a Claude Code task in **Settings › Tasks** and leave: when its account hits a usage limit, it continues from where it stopped once the limit resets, or, if you turn it on, right away on another of your accounts
+- Your accounts in the order you choose, each one's state and next reset; an account known to be out is never tried before its reset
+- The island's **Tasks** tab: every task, its account, why it stopped and what happens next, with Pause, Continue, Switch Account and Cancel
+- It pauses for you when something needs your approval, and never runs a conversation twice
+
 **Now Playing**
 - Works with any app that plays audio or video: Spotify, Music, browsers, podcasts…
 - Reads **Spotify and Music directly** too, so a paused Spotify stays one tap away while a video plays in the browser. Switch players from the island
-- Artwork with a **glow in the cover's colors**, drag to scrub, ±15 s, previous / play / next
 - A **real waveform** that moves with the music: bass pulses in the middle, treble at the edges, in the cover's colors (macOS 14.2+)
+- Artwork with a **glow in the cover's colors**, drag to scrub, ±15 s, previous / play / next
 - **Up Next** from Music's playlist, and **Recently Played** for Spotify and Music: tap a track to play it again
 - System volume and output device right under the player
 - Music or Spotify not open? Their icons are there; tap to open and play
@@ -58,9 +100,8 @@
 - **Jump to the session** in the app it runs in: VS Code, Cursor, Antigravity or Windsurf (the right window), Terminal or iTerm2 (the exact tab)
 - Copy the command that resumes a session
 - **Usage limits as rings**: Claude Code's real 5-hour and weekly percentages (one click to set up, see below), Codex's 5-hour and weekly limits, tokens this window and today
-- Optional sound when an agent finishes or stops to ask you something
-- **Tasks that keep going** (Settings › Tasks): start a Claude Code task and leave. When its account hits a usage limit, it continues from where it stopped once the limit resets, or, if you turn it on, on another of your own accounts. It pauses for you whenever something needs your approval
 - **Several Claude and Codex accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching, also from the menu bar (see below)
+- Optional sound when an agent finishes or stops to ask you something
 
 **Calls, devices and the rest**
 - Call timer for FaceTime, Zoom, Teams, Discord, WhatsApp, Slack and more
@@ -72,7 +113,7 @@
 
 **Everyday use**
 - Opens on hover (or click), closes when you move away; clicks pass straight through everywhere else
-- **Your tab order**: put Media, Agents, Activity and Accounts in the order you like (Settings › Island)
+- **Your tab order**: put Media, Agents, Activity, Accounts and Tasks in the order you like (Settings › Island). Beside a wide notch, the tabs show icons only rather than slide under the camera
 - **Software Update** in Settings: see what's new and update in one click. It checks GitHub once a day (you can turn that off) and never installs on its own
 - Settings window, menu bar panel, Open at Login, `liveisland://` links for Shortcuts
 - Liquid Glass on macOS 26+, with a material fallback on earlier systems
@@ -148,6 +189,8 @@ Start a Claude Code task from **Settings › Tasks**, leave your Mac on, and Liv
 | the account needs signing in again | sets it aside and moves on, or asks you to sign in |
 | a step needed an approval nobody could give | pauses the task as **Needs you**, naming the step |
 | you paused or cancelled it | stops. A cancelled task never starts again |
+
+Follow your tasks from the island's **Tasks** tab: each task with its account, why it stopped and what happens next, with Pause, Continue, Switch Account and Cancel, and beside them your accounts in order, with when each one resets. Starting a task and adding accounts stay in Settings.
 
 A task continues the same conversation with `claude --resume`: by its session on the same account, and by its transcript file on another, since each account keeps its own session list. If a conversation can't be resumed, a new one starts, briefed from the task's checkpoint (the files it changed, its last command and whether it passed, its last message), and the task says so. Before every run, LiveIsland checks that no other `claude` process has the conversation open, so a task never runs twice. Each task has **Pause**, **Cancel**, **Resume**, **Continue Now** and **Switch Account**.
 
@@ -237,7 +280,7 @@ The tests cover the transcript and rollout parsers, the incremental usage ledger
 | Link | Action |
 |---|---|
 | `liveisland://open` · `close` | Open or close the island |
-| `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity` or `accounts` (`accounts/codex` for the Codex list) |
+| `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity`, `accounts` (`accounts/codex` for the Codex list) or `tasks` |
 | `liveisland://timer/5` | Start a 5-minute timer |
 | `liveisland://update` · `update/install` | Check for a new version, and install it |
 | `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `tasks`, `updates`, `about` |
