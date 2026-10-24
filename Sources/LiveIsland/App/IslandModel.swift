@@ -7,6 +7,7 @@ enum IslandTab: String, CaseIterable, Identifiable {
     case agents = "Agents"
     case activity = "Activity"
     case accounts = "Accounts"
+    case tasks = "Tasks"
 
     var id: String { rawValue }
 
@@ -16,6 +17,7 @@ enum IslandTab: String, CaseIterable, Identifiable {
         case .agents: return "sparkles"
         case .activity: return "square.grid.2x2.fill"
         case .accounts: return "person.2.fill"
+        case .tasks: return "checklist"
         }
     }
 }
@@ -562,6 +564,7 @@ final class IslandModel: ObservableObject {
         case .agents: return !sessions.isEmpty
         case .activity: return true
         case .accounts: return !accounts.isEmpty || !codexAccounts.isEmpty
+        case .tasks: return taskRunner.tasks.contains { !$0.isSettled || $0.state == .needsYou }
         }
     }
 

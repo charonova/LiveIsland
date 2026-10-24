@@ -295,6 +295,7 @@ private struct TabOrderRow: View {
         case .agents: return .orange
         case .activity: return .blue
         case .accounts: return .purple
+        case .tasks: return .green
         }
     }
 }
@@ -855,6 +856,13 @@ enum TaskTime {
     static func text(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm zzz" : "EEE d MMM, HH:mm zzz"
+        return formatter.string(from: date)
+    }
+
+    /// For the island, where there's little room: "23:56", or "Wed 03:40" on another day.
+    static func short(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm" : "EEE HH:mm"
         return formatter.string(from: date)
     }
 }

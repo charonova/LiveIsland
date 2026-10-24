@@ -258,7 +258,7 @@ public enum TaskEngine {
             let switched = id != task.profileID
             task.profileID = id
             task.state = .running
-            task.reason = switched ? "\(why.map { $0 + "; " } ?? "")continuing on \(name(id))" : "Continuing"
+            task.reason = switched ? (why.map { "\($0); continuing on \(name(id))" } ?? "Continuing on \(name(id))") : "Continuing"
             return .run(profile: id)
         case .wait(let until, let id):
             task.profileID = id

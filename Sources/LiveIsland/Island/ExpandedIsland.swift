@@ -34,6 +34,7 @@ struct ExpandedIsland: View {
                 case .agents: AgentsPage().transition(.blurReplace)
                 case .activity: ActivityPage().transition(.blurReplace)
                 case .accounts: AccountsPage().transition(.blurReplace)
+                case .tasks: TasksPage().transition(.blurReplace)
                 }
             }
             .padding(.horizontal, 18)
@@ -90,8 +91,9 @@ private struct TabBar: View {
         .liquidGlass(in: Capsule())
     }
 
-    /// A dot on Agents when one needs attention or is at work.
+    /// A dot on Agents or Tasks when one needs attention or is at work.
     @ViewBuilder private func badge(for tab: IslandTab) -> some View {
+        if tab == .tasks, model.tab != .tasks { TasksTabBadge(runner: model.taskRunner) }
         if tab == .agents, model.tab != .agents {
             if model.sessions.contains(where: { $0.state == .waiting }) {
                 Circle().fill(.yellow).frame(width: 6, height: 6).offset(x: -2, y: 3)
@@ -188,6 +190,7 @@ private struct AmbientGlow: View {
                 case .agents: AgentsGlow()
                 case .activity: ActivityGlow()
                 case .accounts: AccountsGlow()
+                case .tasks: TasksGlow(runner: model.taskRunner)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
