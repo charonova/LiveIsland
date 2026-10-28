@@ -426,12 +426,12 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
     }
 
     /// The account to move to next: one that can be switched to, with the most room left.
-    /// Accounts never measured come last.
+    /// Accounts never measured come last; one at 95% or more has no real room left.
     public static func best(_ accounts: [ClaudeAccount], at now: Date) -> ClaudeAccount? {
         accounts
             .filter { !$0.isActive && $0.switcher != nil && !$0.needsLogin }
             .map { $0.current(at: now) }
-            .filter { !$0.isAtLimit }
+            .filter { ($0.used ?? 0) < 95 }
             .min { ($0.used ?? 99.5) < ($1.used ?? 99.5) }
     }
 }
@@ -449,8 +449,18 @@ public struct ClaudeSwapAccount: Equatable, Sendable {
     public var sevenDay: RateLimitWindow?
     public var usageFetchedAt: Date?
     public var isDisabled: Bool
+    public var alias: String? = nil
+    /// This account's own switch-away point, when it has one.
+    public var threshold: Double? = nil
+    public var loginExpiresAt: Date? = nil
+    /// Why its usage couldn't be read, if so.
+    public var usageError: String? = nil
+    /// When it's expected to run out at its current pace, and whether it lasts to its reset.
+    public var projectedExhaustionAt: Date? = nil
+    public var willLastToReset: Bool? = nil
 
-    public var needsLogin: Bool { usageStatus == "relogin_required" }
+    public var needsLogin: Bool { usageStatus == "relogin_required" || usageStatus == "token_expired" }
+    public var name: String { alias ?? email }
 }
 
 /// claude-swap's JSON (schema version 1).
@@ -471,7 +481,13 @@ public enum ClaudeSwapJSON {
                 fiveHour: window(usage?["fiveHour"], minutes: 300),
                 sevenDay: window(usage?["sevenDay"], minutes: 10_080),
                 usageFetchedAt: (row["usageFetchedAt"] as? String).flatMap(Format.date(iso8601:)),
-                isDisabled: row["disabled"] as? Bool ?? false)
+                isDisabled: row["disabled"] as? Bool ?? false,
+                alias: (row["alias"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                threshold: row["threshold"] as? Double,
+                loginExpiresAt: (row["loginExpiresAt"] as? String).flatMap(Format.date(iso8601:)),
+                usageError: row["usageError"] as? String,
+                projectedExhaustionAt: ((usage?["sevenDay"] as? [String: Any])?["projectedExhaustionAt"] as? String).flatMap(Format.date(iso8601:)),
+                willLastToReset: (usage?["sevenDay"] as? [String: Any])?["willLastToReset"] as? Bool)
         }
     }
 
@@ -507,47 +523,48 @@ public enum CodexAccounts {
 }
 
 public enum ClaudeAccounts {
-    /// Everything LiveIsland knows, merged with claude-swap's list when it's used: claude-swap
-    /// adds accounts LiveIsland hasn't seen and fresher limits for the ones it isn't using.
+    /// The Claude accounts to show. With claude-swap managing accounts, exactly its list, in its
+    /// order: it holds the logins and switches them. What LiveIsland saw of an account (its
+    /// plan, a fresher reading for the one in use) fills in. Without claude-swap, the accounts
+    /// Claude Code has used here, with their limits.
     public static func merge(book: AccountBook, claudeSwap: [ClaudeSwapAccount]?, switcher: ClaudeAccount.Switcher?,
                              now: Date) -> [ClaudeAccount] {
-        var accounts: [String: ClaudeAccount] = [:]
-        for (key, entry) in book.entries {
-            let expired = entry.loginExpiresAt.map { $0 <= now } ?? false
-            accounts[key] = ClaudeAccount(
-                identity: entry.identity, isActive: key == book.activeKey,
-                fiveHour: entry.fiveHour, sevenDay: entry.sevenDay, limitsObservedAt: entry.limitsObservedAt,
-                switcher: switcher == .liveIsland && entry.hasSavedLogin ? .liveIsland : nil,
-                needsLogin: switcher == .liveIsland && entry.hasSavedLogin && expired)
-        }
-        for swap in claudeSwap ?? [] where !swap.isDisabled {
-            // claude-swap leaves the organization out for personal accounts: then the email decides.
-            let key = accounts.keys.first { existing in
-                let identity = accounts[existing]!.identity
-                guard identity.email.caseInsensitiveCompare(swap.email) == .orderedSame else { return false }
-                return swap.organizationUUID == nil || identity.organizationUUID == nil || identity.organizationUUID == swap.organizationUUID
-            } ?? ClaudeAccountIdentity.key(email: swap.email, organization: swap.organizationUUID)
-            var account = accounts[key] ?? ClaudeAccount(identity: ClaudeAccountIdentity(
-                accountUUID: "", email: swap.email, organizationUUID: swap.organizationUUID, organizationName: swap.organizationName))
-            if switcher == .claudeSwap {
-                account.switcher = .claudeSwap
+        if let claudeSwap, !claudeSwap.isEmpty {
+            return claudeSwap.sorted { $0.number < $1.number }.map { swap in
+                // claude-swap leaves the organization out for personal accounts: then the email decides.
+                let known = book.entries.values.first { entry in
+                    entry.identity.email.caseInsensitiveCompare(swap.email) == .orderedSame
+                        && (swap.organizationUUID == nil || entry.identity.organizationUUID == nil || entry.identity.organizationUUID == swap.organizationUUID)
+                }
+                var identity = known?.identity ?? ClaudeAccountIdentity(accountUUID: "", email: swap.email,
+                                                                        organizationUUID: swap.organizationUUID,
+                                                                        organizationName: swap.organizationName)
+                identity.email = known?.identity.email ?? swap.email.lowercased()
+                if let alias = swap.alias { identity.name = alias }
+                var account = ClaudeAccount(identity: identity, isActive: swap.isActive, fiveHour: swap.fiveHour,
+                                            sevenDay: swap.sevenDay, limitsObservedAt: swap.usageFetchedAt ?? now,
+                                            switcher: .claudeSwap)
                 account.claudeSwapNumber = swap.number
                 account.needsLogin = swap.needsLogin
+                // The status line reports the account in use as it works; claude-swap polls every few minutes.
+                if let known, swap.isActive, let observed = known.limitsObservedAt, observed > (swap.usageFetchedAt ?? .distantPast),
+                   known.fiveHour != nil || known.sevenDay != nil {
+                    account.fiveHour = known.fiveHour ?? account.fiveHour
+                    account.sevenDay = known.sevenDay ?? account.sevenDay
+                    account.limitsObservedAt = observed
+                }
+                return account.current(at: now)
             }
-            // claude-swap measures every account; LiveIsland only sees the active one, so the
-            // newer of the two wins.
-            let fetched = swap.usageFetchedAt ?? now
-            if swap.fiveHour != nil || swap.sevenDay != nil, fetched > (account.limitsObservedAt ?? .distantPast) {
-                account.fiveHour = swap.fiveHour
-                account.sevenDay = swap.sevenDay
-                account.limitsObservedAt = fetched
-            }
-            accounts[key] = account
+            .sorted { lhs, rhs in lhs.isActive != rhs.isActive ? lhs.isActive : (lhs.claudeSwapNumber ?? 0) < (rhs.claudeSwapNumber ?? 0) }
         }
-        return accounts.values
-            .map { $0.current(at: now) }
-            .sorted { lhs, rhs in
-                lhs.isActive != rhs.isActive ? lhs.isActive : lhs.identity.displayName.localizedCaseInsensitiveCompare(rhs.identity.displayName) == .orderedAscending
-            }
+        return book.entries.map { key, entry in
+            ClaudeAccount(identity: entry.identity, isActive: key == book.activeKey,
+                          fiveHour: entry.fiveHour, sevenDay: entry.sevenDay, limitsObservedAt: entry.limitsObservedAt,
+                          switcher: switcher == .claudeSwap ? nil : switcher)
+                .current(at: now)
+        }
+        .sorted { lhs, rhs in
+            lhs.isActive != rhs.isActive ? lhs.isActive : lhs.identity.displayName.localizedCaseInsensitiveCompare(rhs.identity.displayName) == .orderedAscending
+        }
     }
 }

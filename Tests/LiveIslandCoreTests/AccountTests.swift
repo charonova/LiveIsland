@@ -250,11 +250,13 @@ struct AccountTests {
             account("busy", five: 80, week: 20),
             account("roomy", five: 10, week: 30),
             account("full", five: 5, week: 100),
+            account("nearly full", five: 0, week: 99),
             account("expired", five: 0, week: 0, needsLogin: true),
             account("unswitchable", five: 0, week: 0, switcher: nil),
             account("unknown", five: nil, week: nil),
         ]
         #expect(ClaudeAccount.best(accounts, at: now)?.identity.email == "roomy")
+        #expect(ClaudeAccount.best([accounts[0], accounts[4]], at: now) == nil, "99% of the week is no room")
         #expect(accounts[0].isAtLimit)
         #expect(accounts[0].exhaustedWindow?.windowMinutes == 300)
         // A window that has reset counts from zero.
@@ -293,14 +295,20 @@ struct AccountTests {
         #expect(ClaudeSwapJSON.switchResult(from: Data(error.utf8))?.message == "Account-9 does not exist")
     }
 
-    @Test func mergesLiveIslandAndClaudeSwapAccounts() throws {
+    @Test func showsExactlyClaudeSwapsAccounts() throws {
         let a = try #require(ClaudeAccountIdentity.parse(Data(AccountFixture.oauthAccount().utf8)))
         var book = AccountBook()
         book.setActive(a, at: now)
-        book.entries[a.key]?.hasSavedLogin = true
         book.entries[a.key]?.fiveHour = RateLimitWindow(usedPercent: 50, windowMinutes: 300, resetsAt: now.addingTimeInterval(600))
         book.entries[a.key]?.limitsObservedAt = now
+        // An account Claude Code used here once, that claude-swap doesn't manage.
+        book.setActive(ClaudeAccountIdentity(accountUUID: "x", email: "old@example.com"), at: now.addingTimeInterval(-9000))
+        book.setActive(a, at: now)
+        var spare = ClaudeSwapAccount(number: 3, email: "spare@example.com", organizationName: nil, organizationUUID: nil, isActive: false,
+                                      usageStatus: "relogin_required", fiveHour: nil, sevenDay: nil, usageFetchedAt: now, isDisabled: true)
+        spare.alias = "Spare"
         let swap = [
+            spare,
             ClaudeSwapAccount(number: 1, email: "A@example.com", organizationName: nil, organizationUUID: nil, isActive: true, usageStatus: "ok",
                               fiveHour: RateLimitWindow(usedPercent: 10, windowMinutes: 300, resetsAt: now.addingTimeInterval(600)), sevenDay: nil,
                               usageFetchedAt: now.addingTimeInterval(-60), isDisabled: false),
@@ -308,17 +316,19 @@ struct AccountTests {
                               fiveHour: RateLimitWindow(usedPercent: 5, windowMinutes: 300, resetsAt: now.addingTimeInterval(600)), sevenDay: nil,
                               usageFetchedAt: now, isDisabled: false),
         ]
-        let viaSwap = ClaudeAccounts.merge(book: book, claudeSwap: swap, switcher: .claudeSwap, now: now)
-        #expect(viaSwap.count == 2, "A matched by email although claude-swap left its organization out")
-        #expect(viaSwap[0].isActive && viaSwap[0].identity.email == "a@example.com")
-        #expect(viaSwap[0].fiveHour?.usedPercent == 50, "LiveIsland's own reading is newer than claude-swap's")
-        #expect(viaSwap[0].switcher == .claudeSwap && viaSwap[0].claudeSwapNumber == 1)
-        #expect(viaSwap[1].identity.email == "b@example.com" && viaSwap[1].switcher == .claudeSwap && viaSwap[1].fiveHour?.usedPercent == 5)
+        let accounts = ClaudeAccounts.merge(book: book, claudeSwap: swap, switcher: .claudeSwap, now: now)
+        #expect(accounts.map(\.claudeSwapNumber) == [1, 2, 3], "claude-swap's accounts, the one in use first, then its order")
+        #expect(!accounts.contains { $0.identity.email == "old@example.com" }, "only what claude-swap manages")
+        #expect(accounts[0].isActive && accounts[0].identity.email == "a@example.com", "matched by email although claude-swap left its organization out")
+        #expect(accounts[0].identity.plan == a.plan, "the plan LiveIsland saw fills in")
+        #expect(accounts[0].fiveHour?.usedPercent == 50, "LiveIsland's own reading of the account in use is newer than claude-swap's")
+        #expect(accounts.allSatisfy { $0.switcher == .claudeSwap })
+        #expect(accounts[1].fiveHour?.usedPercent == 5)
+        #expect(accounts[2].identity.displayName == "Spare" && accounts[2].needsLogin, "its alias, and that it needs signing in")
 
-        let native = ClaudeAccounts.merge(book: book, claudeSwap: nil, switcher: .liveIsland, now: now)
-        #expect(native.count == 1 && native[0].switcher == .liveIsland)
-        let off = ClaudeAccounts.merge(book: book, claudeSwap: nil, switcher: nil, now: now)
-        #expect(off[0].switcher == nil)
+        let alone = ClaudeAccounts.merge(book: book, claudeSwap: nil, switcher: nil, now: now)
+        #expect(alone.count == 2 && alone.allSatisfy { $0.switcher == nil }, "without claude-swap, the accounts used here")
+        #expect(ClaudeAccounts.merge(book: book, claudeSwap: [], switcher: .claudeSwap, now: now).count == 2, "claude-swap with no accounts yet")
     }
 
     @Test func theBookSurvivesARestart() throws {
