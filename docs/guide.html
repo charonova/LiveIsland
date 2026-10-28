@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LiveIsland guide</title>
+  <meta name="description" content="How to install LiveIsland, add Claude Code and Codex accounts, switch automatically, and use the console, links and settings.">
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="icon.png" alt="">LiveIsland</a>
+      <div class="links">
+        <a href="./#features" class="hide-sm">Features</a>
+        <a href="./#install">Install</a>
+        <a href="guide.html">Guide</a>
+        <a href="https://github.com/charonova/LiveIsland">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="wrap guide">
+    <aside class="toc">
+      <strong>Start</strong>
+      <a href="#install">Install</a>
+      <a href="#permissions">Permissions</a>
+      <a href="#island">Using the island</a>
+      <strong>Accounts</strong>
+      <a href="#accounts">The Accounts page</a>
+      <a href="#claude">Claude Code (claude-swap)</a>
+      <a href="#codex">Codex (ccswap)</a>
+      <a href="#automatic">Automatic switching</a>
+      <a href="#console">The console</a>
+      <strong>More</strong>
+      <a href="#limits">Claude Code's limits</a>
+      <a href="#links">Links</a>
+      <a href="#updates">Updates</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">Troubleshooting</a>
+      <a href="#build">Build from source</a>
+    </aside>
+
+    <main class="doc">
+      <h1>Guide</h1>
+      <p>Everything LiveIsland does, and how to set it up. For a quick tour, see the <a href="./">home page</a>.</p>
+
+      <h2 id="install">Install</h2>
+      <p>macOS 14 or later, on Apple silicon or Intel. Run this in Terminal:</p>
+      <div class="term">curl -fL https://github.com/charonova/LiveIsland/releases/latest/download/LiveIsland.zip -o /tmp/LiveIsland.zip \
+  &amp;&amp; mkdir -p ~/Applications &amp;&amp; ditto -xk /tmp/LiveIsland.zip ~/Applications &amp;&amp; open ~/Applications/LiveIsland.app</div>
+      <p>LiveIsland isn't notarized by Apple yet (that needs a paid developer account). Installed with the command above, it opens right away. If you downloaded <a href="https://github.com/charonova/LiveIsland/releases/latest">the zip</a> in a browser, unzip it, move LiveIsland to Applications, open it once, then click <b>Open Anyway</b> in <b>System Settings › Privacy &amp; Security</b>.</p>
+      <p>To start it with your Mac, turn on <b>Open at login</b> in Settings › General.</p>
+
+      <h2 id="permissions">Permissions</h2>
+      <p>macOS asks for these the first time each feature needs them. Everything works without them; that feature just stays empty.</p>
+      <table>
+        <tr><th>Permission</th><th>For</th></tr>
+        <tr><td>Calendar</td><td>Your next events, read only</td></tr>
+        <tr><td>Bluetooth</td><td>AirPods battery</td></tr>
+        <tr><td>Automation</td><td>Spotify and Music (now playing and controls), and Terminal or iTerm2 when you jump to a session</td></tr>
+        <tr><td>System audio recording</td><td>The live waveform. It only measures the sound, and never records or keeps it</td></tr>
+      </table>
+      <p>Accounts need no permission: the switchers keep the logins themselves.</p>
+
+      <h2 id="island">Using the island</h2>
+      <p>Point at the notch to open the island (or click it), and move away to close it. When it's closed, clicks pass straight through. It has four tabs, which you can reorder in Settings › Island:</p>
+      <div class="pair">
+        <div><div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/island-agents.png" alt="Agents tab"></div><p class="caption">Agents: sessions and limits</p></div>
+        <div><div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/island-activity.png" alt="Activity tab"></div><p class="caption">Activity: timers, calendar, devices</p></div>
+      </div>
+      <ul>
+        <li><b>Media</b>: any player, with a real waveform, the cover's glow, scrubbing, ±15 s, Up Next and Recently Played</li>
+        <li><b>Agents</b>: every Claude Code and Codex session (working, needs you, done, idle). Click one to jump to its window or Terminal tab, or copy its resume command. Rings show each tool's 5-hour and weekly limits</li>
+        <li><b>Activity</b>: timers, calendar, battery, headphones, microphone and camera</li>
+        <li><b>Accounts</b>: each account's use, with Switch and Auto (see below)</li>
+      </ul>
+      <p>The most important thing wins the closed notch: a call beats an agent that needs you, which beats music. While music plays, an agent or a timer shares the notch with the waveform.</p>
+
+      <h2 id="accounts">The Accounts page</h2>
+      <p><b>Settings › Accounts</b> holds every account. A <b>Claude Code | Codex</b> switch picks the tool. The card under it shows the switcher, its version, the account in use, the last check and <b>Auto</b>; its <b>⋯</b> menu checks for updates and opens the switcher's GitHub page. Below the card are three tabs:</p>
+      <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/settings-accounts.png" alt="Settings › Accounts on Claude Code"></div>
+      <ul>
+        <li><b>Accounts</b>: a card per account with 5-hour and weekly bars and reset times. <b>Switch ★</b> marks the one with the most room. The last card adds an account</li>
+        <li><b>Automatic</b>: the switch, what the last check found, and the switcher's settings</li>
+        <li><b>Console</b>: every command and switch, as text</li>
+      </ul>
+      <p>The island's Accounts tab has the same switch, with each tool's Auto button and a shortcut to its console.</p>
+
+      <h3 id="claude">Claude Code, with claude-swap</h3>
+      <p><a href="https://github.com/realiti4/claude-swap">claude-swap</a> (MIT) keeps a login for each Claude account and puts the one in use in place for Claude Code.</p>
+      <ol>
+        <li><b>Install.</b> Click Install. It runs <code>uv tool install claude-swap</code>, and falls back to pipx, or to Homebrew installing uv.</li>
+        <li><b>Add the account you use now</b> with the link at the bottom of the add card.</li>
+        <li><b>Add another account.</b> Type a name and click <b>Sign In…</b>. Terminal opens Claude Code's own <code>claude auth login</code> in a folder of its own under <code>~/.claude-accounts</code>. Once you've signed in, LiveIsland runs <code>cswap add</code> for it.</li>
+      </ol>
+      <p>Each account's menu keeps it out of automatic rotation, renames it, gives it its own switch point, moves it up or down, or removes it. Running Claude Code sessions follow a switch within about 30 seconds.</p>
+      <div class="callout">Don't sign the <code>~/.claude-accounts</code> folders out later. claude-swap holds the same logins, and signing out cancels them.</div>
+
+      <h3 id="codex">Codex, with ccswap</h3>
+      <p><a href="https://github.com/errhythm/ccswap">ccswap</a> (MIT) is a fork of claude-swap that adds Codex. LiveIsland installs it next to claude-swap without changing it, and runs only its Codex commands, with its data in LiveIsland's own folder. claude-swap's accounts and settings stay as they are.</p>
+      <ol>
+        <li><b>Install</b> runs <code>uv tool install ccswap</code>.</li>
+        <li><b>Add the account Codex uses now.</b></li>
+        <li><b>Sign In…</b> opens <code>codex login</code> in a temporary folder, adds the account to ccswap, then deletes the folder.</li>
+      </ol>
+      <p>A Codex account's menu redeems a banked reset (it asks first) or removes the account. Codex reads its login when it starts, so after a switch, restart a running session with <code>codex resume</code>.</p>
+      <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/settings-codex.png" alt="Settings › Accounts on Codex"></div>
+
+      <h3 id="automatic">Automatic switching</h3>
+      <p>Turn on <b>Auto</b>, on the card or in the island. LiveIsland then runs <code>cswap auto --json</code> or <code>ccswap codex auto --json</code>, restarts it if it ever stops, and shows each switch in the notch. The Automatic tab holds each switcher's own settings, so changing one here is the same as <code>config set</code>:</p>
+      <table>
+        <tr><th></th><th>claude-swap</th><th>ccswap (Codex)</th></tr>
+        <tr><td>Switch point</td><td>5-hour and weekly, separately</td><td>One threshold</td></tr>
+        <tr><td>Timing</td><td>Wait between switches</td><td>Check interval, and wait between switches</td></tr>
+        <tr><td>Pick</td><td>The most room, or the soonest weekly reset</td><td>The most room</td></tr>
+      </table>
+      <div class="callout">Neither Anthropic nor OpenAI says whether switching your own accounts automatically is allowed. Anthropic's Consumer Terms forbid "bypassing any of our systems or protective measures", and Claude Code's limits assume "ordinary, individual usage". Auto stays off until you turn it on, and accounts that bill an API key stay out of rotation.</div>
+
+      <h3 id="console">The console</h3>
+      <p>The console shows every command LiveIsland ran, with its full output and exit code, and every switch, refusal and restart as it happens. Tick <b>Show every check</b> to also see the minute-by-minute checks. Type any other command at the bottom: it runs the switcher directly, never through a shell. The Codex console runs only Codex and settings commands. For Claude, <b>Dashboard</b> opens claude-swap's own dashboard in Terminal.</p>
+      <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/console.png" alt="The console"></div>
+
+      <h2 id="limits">Claude Code's limits</h2>
+      <p>Claude Code shares its 5-hour and weekly percentages only with its status line. In <b>Settings › AI Agents</b>, click <b>Add to My Status Line</b>. LiveIsland adds three lines to your status line script, after it reads its input, and keeps a copy of the original next to it (<code>*.liveisland-backup</code>). To add them yourself, they're in <a href="https://github.com/charonova/LiveIsland/blob/main/scripts/claude-statusline-snippet.sh"><code>scripts/claude-statusline-snippet.sh</code></a>. Without them, LiveIsland still counts Claude Code's tokens from its transcripts. Codex writes its limits into its sessions, so it needs nothing.</p>
+
+      <h2 id="links">Links</h2>
+      <p>Open these from Shortcuts, Raycast, Alfred or a terminal (<code>open liveisland://open</code>):</p>
+      <table>
+        <tr><th>Link</th><th>Does</th></tr>
+        <tr><td><code>liveisland://open</code> · <code>close</code></td><td>Open or close the island. Add <code>/media</code>, <code>/agents</code>, <code>/activity</code>, <code>/accounts</code> or <code>/accounts/codex</code> to pick a page</td></tr>
+        <tr><td><code>liveisland://settings/…</code></td><td><code>general</code>, <code>island</code>, <code>media</code>, <code>agents</code>, <code>accounts</code>, <code>updates</code>, <code>about</code>. After <code>accounts</code>: <code>claude</code> or <code>codex</code>, then <code>automatic</code> or <code>console</code>, as in <code>settings/accounts/codex/console</code></td></tr>
+        <tr><td><code>liveisland://timer/5</code></td><td>Start a 5-minute timer</td></tr>
+        <tr><td><code>liveisland://update</code> · <code>update/install</code></td><td>Check for a new version, and install it</td></tr>
+      </table>
+
+      <h2 id="updates">Updates</h2>
+      <p><b>Settings › Software Update</b> shows the version you have, and whether a newer one is out on GitHub, with what's new. <b>Update Now</b> downloads it and checks it: the SHA-256 must match, it must be LiveIsland at the promised version, and its signature must verify. It then replaces the app and reopens it. LiveIsland checks once a day, which you can turn off, and never installs on its own. To update claude-swap or ccswap, use <b>⋯ › Check for Updates</b> on the Accounts card.</p>
+
+      <h2 id="privacy">Privacy</h2>
+      <ul>
+        <li>No analytics, no account. Transcripts, calendar events and everything else stay on your Mac.</li>
+        <li>LiveIsland never reads a login. claude-swap keeps Claude's logins in your Keychain, and ccswap keeps Codex's as private files in LiveIsland's folder. The console lives only in memory.</li>
+        <li>Network requests: Spotify's cover art, and one GitHub check a day for updates. The switchers ask Anthropic and OpenAI for each account's use, as they do on their own.</li>
+      </ul>
+
+      <h2 id="faq">Troubleshooting</h2>
+      <details><summary>"Apple could not verify LiveIsland"</summary><p>It isn't notarized yet. Open it once, then click <b>Open Anyway</b> in System Settings › Privacy &amp; Security, or install it with the Terminal command above.</p></details>
+      <details><summary>A switch happened but Codex still uses the old account</summary><p>Codex reads its login only when it starts. Restart the session with <code>codex resume</code>.</p></details>
+      <details><summary>The switch point shows 90% but I set 95%</summary><p>claude-swap and ccswap keep separate settings. Set each one on its own Automatic tab.</p></details>
+      <details><summary>An account says "Sign in again"</summary><p>Its saved login stopped working. Remove it, then add it again with <b>Sign In…</b>. Avoid <code>claude auth logout</code> and <code>codex logout</code> on accounts a switcher holds.</p></details>
+      <details><summary>The waveform doesn't move</summary><p>Allow System audio recording when macOS asks; a new build may ask again. Without it, the island shows an animated symbol. You can turn the waveform off in Settings › Media.</p></details>
+      <details><summary>No limits for Claude Code</summary><p>Add LiveIsland's lines to your status line (see <a href="#limits">Claude Code's limits</a>). The numbers appear after Claude Code's next reply.</p></details>
+
+      <h2 id="build">Build from source</h2>
+      <p>You need the Xcode Command Line Tools and CMake (<code>brew install cmake</code>, for the media adapter):</p>
+      <div class="term">git clone https://github.com/charonova/LiveIsland.git &amp;&amp; cd LiveIsland
+./scripts/install.sh   # builds, copies to ~/Applications and launches
+./scripts/test.sh      # runs the tests</div>
+      <p>See <a href="https://github.com/charonova/LiveIsland/blob/main/AGENTS.md">AGENTS.md</a> for the code layout and the project's rules.</p>
+    </main>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <span>LiveIsland · MIT © 2026 Aissam Irhir</span>
+      <span><a href="./">Home</a> · <a href="https://github.com/charonova/LiveIsland/releases">Releases</a> · <a href="https://github.com/charonova/LiveIsland/issues">Issues</a></span>
+      <span>Not affiliated with Anthropic, OpenAI or Apple.</span>
+    </div>
+  </footer>
+</body>
+</html>

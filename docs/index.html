@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LiveIsland: your coding agents don't stop at a usage limit</title>
+  <meta name="description" content="A free, open-source Dynamic Island for the Mac's notch. It moves Claude Code and Codex to your next account before the one in use runs out, and shows who's working, what's playing and how much room every account has left.">
+  <meta property="og:title" content="LiveIsland">
+  <meta property="og:description" content="A Dynamic Island for the Mac's notch that keeps Claude Code and Codex working past usage limits.">
+  <meta property="og:image" content="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/island-accounts.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="icon.png" alt="">LiveIsland</a>
+      <div class="links">
+        <a href="#why" class="hide-sm">Why</a>
+        <a href="#features" class="hide-sm">Features</a>
+        <a href="#install">Install</a>
+        <a href="guide.html">Guide</a>
+        <a href="https://github.com/charonova/LiveIsland">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap">
+      <div class="notch" aria-hidden="true"><span class="spark">✦</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span></div>
+      <h1>Your coding agents<br><span class="grad">don't stop at a usage limit.</span></h1>
+      <p class="lead">A free, open-source Dynamic Island for the Mac's notch. It moves Claude Code and Codex to your next account before the one in use runs out, and shows who's working, what's playing and how much room every account has left.</p>
+      <div class="cta">
+        <a class="btn primary" href="#install">Install for macOS</a>
+        <a class="btn" href="https://github.com/charonova/LiveIsland">★ Star on GitHub</a>
+      </div>
+      <div class="meta">macOS 14+ · Apple silicon and Intel · MIT · under 1% CPU when closed</div>
+      <div class="shot-hero"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/island-accounts.png" alt="The island's Accounts tab: three Claude accounts with their 5-hour and weekly use, Auto on, and Switch ★ on the one with the most room"></div>
+    </div>
+  </header>
+
+  <section id="why">
+    <div class="wrap">
+      <div class="eyebrow">The problem</div>
+      <h2>You walk away. Forty minutes later, it has stopped.</h2>
+      <p class="sub">You hand Claude Code or Codex a long job. It hits a limit, and nothing moves until you come back, sign in to another account and type "continue". If you pay for more than one account, the others sat idle the whole time.</p>
+      <div class="quote">You've hit your session limit · resets 3:45pm</div>
+      <div class="compare">
+        <div class="card bad">
+          <h3>Without LiveIsland</h3>
+          <ul>
+            <li>The agent stops until you notice</li>
+            <li>Log out, log in, guess which account has room</li>
+            <li>What the switcher did is hidden in a terminal</li>
+            <li>Check every window to see which agent needs you</li>
+          </ul>
+        </div>
+        <div class="card good">
+          <h3>With LiveIsland</h3>
+          <ul>
+            <li>It moves to the account with the most room <em>before</em> the limit</li>
+            <li>Every account's 5-hour and weekly use, side by side; one click to switch</li>
+            <li>A console with every command, check and switch</li>
+            <li>The notch says who needs you, and jumps to the right tab</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" style="padding-top: 24px">
+    <div class="wrap">
+      <div class="eyebrow">What it does</div>
+      <h2>Everything your notch should have been doing.</h2>
+
+      <div class="feature">
+        <div class="text">
+          <span class="tag claude">Claude Code</span> <span class="tag codex">Codex</span>
+          <h3>Switches before you hit the wall</h3>
+          <p>LiveIsland runs two open-source switchers for you: <a href="https://github.com/realiti4/claude-swap">claude-swap</a> for Claude Code and <a href="https://github.com/errhythm/ccswap">ccswap</a> for Codex. Each checks every account once a minute and moves to the one with the most room when the account in use nears your switch point.</p>
+          <ul>
+            <li>Install and update them in one click</li>
+            <li>Add accounts with each tool's own sign-in; the one in use stays as it is</li>
+            <li>Your switch points for the 5-hour and the weekly limit</li>
+            <li>Off until you turn it on</li>
+          </ul>
+        </div>
+        <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/settings-accounts.png" alt="Settings › Accounts with claude-swap and three account cards"></div>
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <span class="tag green">Nothing hidden</span>
+          <h3>See every command and every switch</h3>
+          <p>The console shows each command LiveIsland runs, with its output and exit code, and every check and switch as it happens. Type your own commands there too. LiveIsland never reads a login: the switchers hold them.</p>
+        </div>
+        <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/console.png" alt="The console with cswap auto running and a switch between accounts"></div>
+      </div>
+
+      <div class="feature">
+        <div class="text">
+          <span class="tag claude">Agents</span>
+          <h3>Who's working, who needs you</h3>
+          <p>Every Claude Code and Codex session: working with a timer, waiting for you, done or idle. Jump to the exact Terminal tab or editor window, and see both tools' real 5-hour and weekly limits as rings.</p>
+        </div>
+        <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/island-agents.png" alt="Agents: three sessions working, one that needs you, and limit rings"></div>
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <span class="tag" style="color:#ff5fa2;background:rgba(255,95,162,.12)">Media</span>
+          <h3>A real waveform, from any player</h3>
+          <p>Now playing from Spotify, Music, browsers and anything else, with a waveform that moves to the music, a glow from the cover, scrubbing, Up Next and Recently Played. While music plays, an agent can share the notch with it, like the iPhone.</p>
+        </div>
+        <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/island-media.png" alt="Media: Spotify's track with cover art, scrubber and controls"></div>
+      </div>
+
+      <div class="grid">
+        <div class="card"><div class="icon">📞</div><h3>Calls, mic & camera</h3><p>A call timer for FaceTime, Zoom, Teams and more, plus which app is listening or watching.</p></div>
+        <div class="card"><div class="icon">🎧</div><h3>AirPods & battery</h3><p>Left, right and case levels when they connect; charging and time left.</p></div>
+        <div class="card"><div class="icon">⏱️</div><h3>Timers & calendar</h3><p>Quick timers, your next meetings, and a heads-up 10 minutes before.</p></div>
+        <div class="card"><div class="icon">🪶</div><h3>Nearly free when idle</h3><p>Under 1% of one core while closed. Nothing animates frame by frame unless you can see it.</p></div>
+        <div class="card"><div class="icon">🔒</div><h3>Private by design</h3><p>No analytics, no account. Transcripts and calendar stay on your Mac.</p></div>
+        <div class="card"><div class="icon">🔗</div><h3>Scriptable</h3><p><code>liveisland://</code> links for Shortcuts, Raycast or a terminal.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <div class="eyebrow">Install</div>
+      <h2>One command, then three steps.</h2>
+      <div class="install">
+        <div class="term" id="cmd">curl -fL https://github.com/charonova/LiveIsland/releases/latest/download/LiveIsland.zip -o /tmp/LiveIsland.zip \
+  &amp;&amp; mkdir -p ~/Applications &amp;&amp; ditto -xk /tmp/LiveIsland.zip ~/Applications &amp;&amp; open ~/Applications/LiveIsland.app<button class="copy" onclick="copyCmd(this)">Copy</button></div>
+        <p class="note">Not notarized by Apple yet. Installed this way it opens right away; from a browser download, use <b>Open Anyway</b> in System Settings › Privacy &amp; Security. Later versions install from Settings › Software Update.</p>
+      </div>
+      <div class="steps">
+        <div class="step card"><h3>Install the switcher</h3><p>Settings › Accounts, pick Claude Code or Codex, click <b>Install</b>.</p></div>
+        <div class="step card"><h3>Add your accounts</h3><p>Type a name, click <b>Sign In…</b>. The tool's own sign-in opens; the account in use stays as it is.</p></div>
+        <div class="step card"><h3>Turn on Auto</h3><p>It switches before the account in use runs out. Watch it from the island or the console.</p></div>
+      </div>
+      <div class="callout">⚠️ Neither Anthropic nor OpenAI says whether switching your own accounts automatically is allowed. Anthropic's Consumer Terms forbid "bypassing any of our systems or protective measures". Auto stays off until you turn it on. Keep it to accounts you pay for.</div>
+      <p style="margin-top:28px"><a class="btn" href="guide.html">Read the full guide →</a></p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <span>LiveIsland · MIT © 2026 Aissam Irhir</span>
+      <span><a href="guide.html">Guide</a> · <a href="https://github.com/charonova/LiveIsland/releases">Releases</a> · <a href="https://github.com/charonova/LiveIsland/issues">Issues</a></span>
+      <span>Not affiliated with Anthropic, OpenAI or Apple.</span>
+    </div>
+  </footer>
+
+  <script>
+    function copyCmd(button) {
+      const text = document.getElementById('cmd').childNodes[0].textContent.trim();
+      navigator.clipboard.writeText(text).then(() => {
+        button.textContent = 'Copied';
+        setTimeout(() => (button.textContent = 'Copy'), 1500);
+      });
+    }
+  </script>
+</body>
+</html>
