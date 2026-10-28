@@ -89,7 +89,8 @@ final class ClaudeSwapController: ObservableObject {
             await refresh()
             await loadSettings()
             await checkLegacyLogins()
-            if autoSwitch { startAuto() }
+            // Only once it's there: a Mac without it has nothing to start yet.
+            if autoSwitch, executable != nil { startAuto() }
         }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -115,36 +116,60 @@ final class ClaudeSwapController: ObservableObject {
     private func locate() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var candidates = ["\(home)/.local/bin/cswap", "/opt/homebrew/bin/cswap", "/usr/local/bin/cswap"]
-        if let standIn = ProcessInfo.processInfo.environment["LIVEISLAND_CSWAP"] { candidates.insert(standIn, at: 0) }
+        // A stand-in is the only one looked at, so a missing one tests a Mac without cswap.
+        if let standIn = ProcessInfo.processInfo.environment["LIVEISLAND_CSWAP"] { candidates = [standIn] }
         executable = candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
         menuBarServiceInstalled = FileManager.default.fileExists(atPath: "\(home)/Library/LaunchAgents/com.cswap.menubar.plist")
     }
 
-    /// uv first (claude-swap's own advice), then pipx; with neither, Homebrew installs uv.
+    /// Everything a new Mac needs, in one go: uv when neither uv nor pipx is there (its own
+    /// installer, or Homebrew's), then claude-swap, then the account Claude Code uses now.
     func install() async {
         guard busy == nil else { return }
-        busy = "Installing claude-swap…"
         defer { busy = nil }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let find = { (names: [String]) in names.first { FileManager.default.isExecutableFile(atPath: $0) } }
-        var uv = find(["\(home)/.local/bin/uv", "/opt/homebrew/bin/uv", "/usr/local/bin/uv"])
-        let pipx = find(["\(home)/.local/bin/pipx", "/opt/homebrew/bin/pipx", "/usr/local/bin/pipx"])
-        if uv == nil, pipx == nil, let brew = find(["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]) {
-            _ = await run(brew, ["install", "uv"], title: "brew install uv", timeout: 900)
-            uv = find(["/opt/homebrew/bin/uv", "/usr/local/bin/uv"])
+        var uv = PythonTools.find("uv")
+        let pipx = PythonTools.find("pipx")
+        if uv == nil, pipx == nil {
+            busy = "Installing uv…"
+            _ = await run("/bin/sh", ["-c", PythonTools.uvInstall], title: "install uv (docs.astral.sh/uv)", timeout: 300)
+            uv = PythonTools.find("uv")
+            if uv == nil, let brew = PythonTools.find("brew") {
+                _ = await run(brew, ["install", "uv"], title: "brew install uv", timeout: 900)
+                uv = PythonTools.find("uv")
+            }
         }
+        busy = "Installing claude-swap…"
         if let uv {
             _ = await run(uv, ["tool", "install", "claude-swap"], title: "uv tool install claude-swap", timeout: 900)
         } else if let pipx {
             _ = await run(pipx, ["install", "claude-swap"], title: "pipx install claude-swap", timeout: 900)
         } else {
-            note("Neither uv, pipx nor Homebrew is installed. Install uv (https://docs.astral.sh/uv/), then try again.", error: true)
+            note("uv couldn't be installed (see above). Check the internet connection and try again, or install uv from docs.astral.sh/uv.", error: true)
             return
         }
         locate()
+        guard executable != nil else {
+            note("claude-swap didn't install: see the output above.", error: true)
+            return
+        }
         await refreshVersion()
         await refresh()
         await loadSettings()
+        await addCurrentIfNone()
+        if autoSwitch { startAuto() }
+    }
+
+    /// The last step of setting up: the account Claude Code is signed in to, when claude-swap has none.
+    private func addCurrentIfNone() async {
+        guard accounts?.isEmpty == true else { return }
+        guard let current = ClaudeLogins.active() else {
+            note("claude-swap is ready. Sign in to Claude Code (claude, then /login), or add an account below.")
+            return
+        }
+        busy = "Adding \(current.identity.email)…"
+        _ = await cswap(["add"])
+        await refresh()
+        if accounts?.isEmpty == false { note("Set up: claude-swap has \(current.identity.email). Add your other accounts below.") }
     }
 
     func upgrade() async {
@@ -357,7 +382,7 @@ final class ClaudeSwapController: ObservableObject {
         }
         process.terminationHandler = { [weak self] process in
             let status = process.terminationStatus
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.autoEnded(status) } }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.autoEnded(process, status) } }
         }
         do {
             try process.run()
@@ -402,9 +427,11 @@ final class ClaudeSwapController: ObservableObject {
         }
     }
 
-    private func autoEnded(_ status: Int32) {
-        // A switch turned off, or LiveIsland quitting, isn't a failure.
-        guard autoProcess != nil else { return }
+    private func autoEnded(_ process: Process, _ status: Int32) {
+        // A switch turned off, LiveIsland quitting, or the loop stopped for a restart isn't a
+        // failure. A stopped loop can end after its replacement started: only the one running
+        // now counts, or the replacement would be forgotten and keep switching on its own.
+        guard process === autoProcess else { return }
         autoProcess = nil
         if let index = entries.lastIndex(where: { $0.title == "$ cswap auto --json" && $0.isRunning }) {
             entries[index].isRunning = false

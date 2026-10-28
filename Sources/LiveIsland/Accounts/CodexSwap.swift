@@ -89,7 +89,8 @@ final class CodexSwapController: ObservableObject {
             await loadSettings()
             countLegacyLogins()
             await endOrphanedLoops()
-            if autoSwitch { startAuto() }
+            // Only once it's there: a Mac without it has nothing to start yet.
+            if autoSwitch, executable != nil { startAuto() }
         }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -113,40 +114,63 @@ final class CodexSwapController: ObservableObject {
     private func locate() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var candidates = ["\(home)/.local/bin/ccswap", "/opt/homebrew/bin/ccswap", "/usr/local/bin/ccswap"]
-        if let standIn = ProcessInfo.processInfo.environment["LIVEISLAND_CCSWAP"] { candidates.insert(standIn, at: 0) }
+        // A stand-in is the only one looked at, so a missing one tests a Mac without ccswap.
+        if let standIn = ProcessInfo.processInfo.environment["LIVEISLAND_CCSWAP"] { candidates = [standIn] }
         executable = candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
     private static func tool(_ names: [String]) -> String? {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return names.flatMap { ["\(home)/.local/bin/\($0)", "/opt/homebrew/bin/\($0)", "/usr/local/bin/\($0)"] }
-            .first { FileManager.default.isExecutableFile(atPath: $0) }
+        names.lazy.compactMap(PythonTools.find).first
     }
 
-    /// uv first (ccswap's own advice), then pipx; with neither, Homebrew installs uv. Its own
-    /// tool folder, next to claude-swap's: claude-swap stays as it is.
+    /// Everything a new Mac needs, in one go: uv when neither uv nor pipx is there (its own
+    /// installer, or Homebrew's), then ccswap next to claude-swap, then the account Codex uses now.
     func install() async {
         guard busy == nil else { return }
-        busy = "Installing ccswap…"
         defer { busy = nil }
         var uv = Self.tool(["uv"])
         let pipx = Self.tool(["pipx"])
-        if uv == nil, pipx == nil, let brew = Self.tool(["brew"]) {
-            _ = await run(brew, ["install", "uv"], title: "brew install uv", environment: installEnvironment(), timeout: 900)
+        if uv == nil, pipx == nil {
+            busy = "Installing uv…"
+            _ = await run("/bin/sh", ["-c", PythonTools.uvInstall], title: "install uv (docs.astral.sh/uv)", environment: installEnvironment(), timeout: 300)
             uv = Self.tool(["uv"])
+            if uv == nil, let brew = Self.tool(["brew"]) {
+                _ = await run(brew, ["install", "uv"], title: "brew install uv", environment: installEnvironment(), timeout: 900)
+                uv = Self.tool(["uv"])
+            }
         }
+        busy = "Installing ccswap…"
         if let uv {
             _ = await run(uv, ["tool", "install", "ccswap"], title: "uv tool install ccswap", environment: installEnvironment(), timeout: 900)
         } else if let pipx {
             _ = await run(pipx, ["install", "ccswap"], title: "pipx install ccswap", environment: installEnvironment(), timeout: 900)
         } else {
-            note("Neither uv, pipx nor Homebrew is installed. Install uv (https://docs.astral.sh/uv/), then try again.", error: true)
+            note("uv couldn't be installed (see above). Check the internet connection and try again, or install uv from docs.astral.sh/uv.", error: true)
             return
         }
         locate()
+        guard executable != nil else {
+            note("ccswap didn't install: see the output above.", error: true)
+            return
+        }
         await refreshVersion()
         await refresh()
         await loadSettings()
+        await addCurrentIfNone()
+        if autoSwitch { startAuto() }
+    }
+
+    /// The last step of setting up: the account Codex is signed in to, when ccswap has none.
+    private func addCurrentIfNone() async {
+        guard accounts?.isEmpty == true else { return }
+        guard let current = CodexLogins.active() else {
+            note("ccswap is ready. Sign in to Codex (codex login), or add an account below.")
+            return
+        }
+        busy = "Adding \(current.identity.email)…"
+        _ = await ccswap(["codex", "add"])
+        await refresh()
+        if accounts?.isEmpty == false { note("Set up: ccswap has \(current.identity.email). Add your other accounts below.") }
     }
 
     /// With the tool that installed it, not `ccswap upgrade`: that would run ccswap with the

@@ -688,7 +688,7 @@ private struct AutoBadge: View {
     @ObservedObject var codex: CodexSwapController
 
     var body: some View {
-        if claude.autoSwitch || codex.autoSwitch {
+        if (claude.autoSwitch && claude.executable != nil) || (codex.autoSwitch && codex.executable != nil) {
             Text("Auto").font(.system(size: 9.5, weight: .bold)).foregroundStyle(.green)
                 .padding(.horizontal, 5).padding(.vertical, 1)
                 .background(Capsule().fill(Color.green.opacity(0.15)))

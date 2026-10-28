@@ -26,7 +26,7 @@ struct AccountsSettingsPage: View {
             }
             switch navigation.accountsKind {
             case .codex:
-                SwapToolPage(tool: model.codexSwap, kind: .codex) {
+                SwapToolPage(tool: model.codexSwap, kind: .codex, signedIn: model.codexAccounts.first(where: \.isActive)?.identity.email) {
                     CodexBanners(swap: model.codexSwap)
                 } accounts: {
                     CodexCards(swap: model.codexSwap)
@@ -34,7 +34,7 @@ struct AccountsSettingsPage: View {
                     EmptyView()
                 }
             default:
-                SwapToolPage(tool: model.claudeSwap, kind: .claude) {
+                SwapToolPage(tool: model.claudeSwap, kind: .claude, signedIn: model.accounts.first(where: \.isActive)?.identity.email) {
                     ClaudeBanners(swap: model.claudeSwap)
                 } accounts: {
                     ClaudeCards(swap: model.claudeSwap)
@@ -167,6 +167,8 @@ private struct SwapToolPage<Tool: SwapTool, Banners: View, Accounts: View, Conso
     @EnvironmentObject private var navigation: SettingsNavigation
     @ObservedObject var tool: Tool
     let kind: AgentKind
+    /// The account the agent is signed in to now, which setting up adds.
+    let signedIn: String?
     @ViewBuilder var banners: Banners
     @ViewBuilder var accounts: Accounts
     @ViewBuilder var consoleActions: ConsoleActions
@@ -197,8 +199,7 @@ private struct SwapToolPage<Tool: SwapTool, Banners: View, Accounts: View, Conso
                     ConsoleTab(tool: tool) { consoleActions }
                 }
             } else {
-                SetUpCard(tool: tool, kind: kind)
-                Spacer(minLength: 0)
+                ScrollView { SetUpCard(tool: tool, kind: kind, signedIn: signedIn) }
             }
         }
         .onAppear { tool.isVisible = true }
@@ -233,9 +234,7 @@ private struct StatusCard<Tool: SwapTool>: View {
             if let busy = tool.busy {
                 ProgressView().controlSize(.small)
                 Text(busy).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-            } else if tool.executable == nil {
-                Button("Install") { Task { await tool.install() } }.glassButton(prominent: true)
-            } else {
+            } else if tool.executable != nil {
                 if let newer = tool.newerVersion {
                     Button("Update to \(newer)") { Task { await tool.upgrade() } }.glassButton()
                 }
@@ -309,26 +308,97 @@ private struct AutoPill<Tool: SwapTool>: View {
     }
 }
 
-/// Before the tool is installed: what it is, and one button.
+/// Before the tool is installed: what it does, the steps one button takes, and what they print.
 private struct SetUpCard<Tool: SwapTool>: View {
     @ObservedObject var tool: Tool
     let kind: AgentKind
+    let signedIn: String?
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "arrow.left.arrow.right.circle.fill").font(.system(size: 40)).foregroundStyle(tool.info.tint)
-            Text("Switch \(kind.displayName) accounts with \(tool.info.name)").font(.system(size: 15, weight: .semibold))
-            Text(tool.info.pitch).font(.system(size: 12)).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 420).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 10) {
-                Button("Install \(tool.info.name)") { Task { await tool.install() } }.glassButton(prominent: true).disabled(tool.busy != nil)
-                if let url = URL(string: tool.info.repository) { Link("About it", destination: url).font(.system(size: 12)) }
+        let info = tool.info
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "arrow.left.arrow.right.circle.fill").font(.system(size: 34)).foregroundStyle(info.tint)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Set up \(info.name)").font(.system(size: 16, weight: .semibold))
+                    Text("It switches your \(kind.displayName) accounts, by hand or before one runs out. One click installs it and adds your account.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
             }
-            Text("Installs with uv (or pipx), as its README recommends. MIT license.").font(.system(size: 10.5)).foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 10) {
+                SetUpStep(state: uvState, title: PythonTools.installer.map { "\($0) is ready" } ?? "Install uv",
+                          detail: PythonTools.installer == nil ? "The installer for Python tools, from docs.astral.sh/uv, into ~/.local/bin" : "It installs \(info.name)")
+                SetUpStep(state: toolState, title: "Install \(info.name)", detail: "MIT, from \(info.repository.replacingOccurrences(of: "https://", with: ""))")
+                SetUpStep(state: accountState, title: signedIn.map { "Add \($0)" } ?? "Add your account",
+                          detail: signedIn != nil ? "The account \(kind.displayName) uses now" : "Sign in to \(kind.displayName) first, or add accounts afterwards with Sign In…")
+            }
+            HStack(spacing: 10) {
+                Button(tool.entries.contains(where: \.isError) ? "Try Again" : "Install and Set Up") { Task { await tool.install() } }
+                    .glassButton(prominent: true)
+                    .controlSize(.large)
+                    .disabled(tool.busy != nil)
+                if let busy = tool.busy {
+                    ProgressView().controlSize(.small)
+                    Text(busy).font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("About \(info.name)") { if let url = URL(string: info.repository) { NSWorkspace.shared.open(url) } }
+                    .buttonStyle(.link).font(.system(size: 12))
+            }
+            if !tool.entries.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(tool.entries.suffix(6)) { ConsoleLine(entry: $0) }
+                }
+                .font(.system(size: 10.5, design: .monospaced))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(white: 0.07)))
+                .environment(\.colorScheme, .dark)
+                .textSelection(.enabled)
+            }
         }
-        .padding(24)
-        .frame(maxWidth: .infinity)
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(Card())
+    }
+
+    private var uvState: SetUpStep.State {
+        if PythonTools.installer != nil { return .done }
+        return tool.busy?.contains("uv") == true ? .running : .todo
+    }
+
+    private var toolState: SetUpStep.State {
+        if tool.executable != nil { return .done }
+        return tool.busy?.contains(tool.info.name) == true ? .running : .todo
+    }
+
+    private var accountState: SetUpStep.State {
+        tool.busy?.hasPrefix("Adding") == true ? .running : .todo
+    }
+}
+
+private struct SetUpStep: View {
+    enum State { case todo, running, done }
+    let state: State
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Group {
+                switch state {
+                case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                case .running: ProgressView().controlSize(.small)
+                case .todo: Image(systemName: "circle").foregroundStyle(.tertiary)
+                }
+            }
+            .font(.system(size: 15))
+            .frame(width: 18, height: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 12.5, weight: .medium))
+                Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
