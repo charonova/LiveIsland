@@ -72,7 +72,7 @@ LiveIsland turns the notch into a Dynamic Island that keeps an eye on your work 
   </tr>
   <tr>
     <td align="center" colspan="3">
-      <img src="demo/settings-agents.png" width="560" alt="Settings window, AI Agents page: agent toggles and sound"><br>
+      <img src="demo/settings-island.png" width="560" alt="Settings window, Island page: a preview of the island, and what it shows: Now Playing, AI Agents, calls, AirPods, calendar"><br>
       <sub><b>Settings</b><br>Everything, in one window</sub>
     </td>
   </tr>
