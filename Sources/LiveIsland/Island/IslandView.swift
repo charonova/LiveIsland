@@ -144,6 +144,7 @@ struct CompactIsland: View {
         case .agentNeedsYou(let kind, let project): return "needs-\(kind)-\(project)"
         case .agentDone(let kind, let project): return "done-\(kind)-\(project)"
         case .accountLimit(let account, _): return "limit-\(account)"
+        case .accountSwitched(let to): return "switched-\(to)"
         case .agentWorking(let kind, let project, _): return "working-\(kind)-\(project)"
         case .headphonesConnected: return "headphones"
         case .charging: return "charging"
@@ -164,6 +165,8 @@ struct CompactIsland: View {
             TimerRing(size: 18)
         case .agentNeedsYou(let kind, _), .agentDone(let kind, _):
             AgentGlyph(kind: kind, size: 15)
+        case .accountSwitched:
+            Image(systemName: "arrow.triangle.2.circlepath.circle.fill").foregroundStyle(.green)
         case .accountLimit:
             Image(systemName: "person.crop.circle.badge.exclamationmark.fill")
                 .symbolRenderingMode(.palette)
@@ -202,6 +205,8 @@ struct CompactIsland: View {
             Text("Needs you").foregroundStyle(.yellow)
         case .accountLimit:
             Text("Switch").foregroundStyle(.orange)
+        case .accountSwitched:
+            Text("Switched").foregroundStyle(.green)
         case .agentDone:
             Label("Done", systemImage: "checkmark").labelStyle(.titleAndIcon).foregroundStyle(.green)
         case .agentWorking(_, _, let since):

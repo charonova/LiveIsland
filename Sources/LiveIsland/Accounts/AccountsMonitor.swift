@@ -4,36 +4,12 @@ import os
 
 private let log = Logger(subsystem: "com.aissam.liveisland", category: "accounts")
 
-/// Every Claude and Codex account the user has used here: which one each tool is on, each
-/// one's limits, and switching between them (Claude by LiveIsland itself or through
-/// claude-swap; Codex by LiveIsland). It never switches on its own; only `switchTo` does,
-/// when the user asks.
+/// Every Claude and Codex account the user has used here: which one each tool is on, and
+/// each one's limits. Claude accounts come from claude-swap when it manages them (it switches
+/// them too), merged with what the status line reports; Codex accounts switch through
+/// LiveIsland, only when the user asks.
 @MainActor
 final class AccountsMonitor {
-    enum Switching: String, CaseIterable, Identifiable {
-        case off
-        case liveIsland
-        case claudeSwap
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .off: return "Off"
-            case .liveIsland: return "LiveIsland"
-            case .claudeSwap: return "claude-swap"
-            }
-        }
-
-        var switcher: ClaudeAccount.Switcher? {
-            switch self {
-            case .off: return nil
-            case .liveIsland: return .liveIsland
-            case .claudeSwap: return .claudeSwap
-            }
-        }
-    }
-
     struct Snapshot: Equatable {
         var accounts: [ClaudeAccount] = []
         var codexAccounts: [ClaudeAccount] = []
@@ -50,8 +26,9 @@ final class AccountsMonitor {
 
     var onUpdate: ((Snapshot) -> Void)?
     private(set) var snapshot = Snapshot()
-    var mode: Switching = .off {
-        didSet { if mode != oldValue { refresh(forceClaudeSwap: true) } }
+    /// claude-swap's accounts, from its controller; nil when it isn't installed.
+    var claudeSwap: [ClaudeSwapAccount]? {
+        didSet { if claudeSwap != oldValue { refresh() } }
     }
     /// Whether LiveIsland keeps Codex logins to switch between them.
     var codexSwitching = false {
@@ -68,7 +45,7 @@ final class AccountsMonitor {
     var isVisible = false
 
     func start() {
-        refresh(forceClaudeSwap: true)
+        refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
@@ -86,43 +63,34 @@ final class AccountsMonitor {
         latestCodexLimits = codexLimits
     }
 
-    func refresh(forceClaudeSwap: Bool = false) {
-        let input = Worker.Input(mode: mode, codexSwitching: codexSwitching, limits: latestLimits, notice: latestNotice,
-                                 codexLimits: latestCodexLimits, claudeSwapInterval: forceClaudeSwap ? 0 : (isVisible ? 60 : 300))
+    func refresh() {
+        let input = Worker.Input(claudeSwap: claudeSwap, codexSwitching: codexSwitching, limits: latestLimits, notice: latestNotice,
+                                 codexLimits: latestCodexLimits)
         queue.async { [weak self, worker] in
             let accounts = worker.tick(input, now: Date())
             DispatchQueue.main.async {
                 guard let self else { return }
                 var next = self.snapshot
                 (next.accounts, next.codexAccounts) = accounts
-                next.claudeSwapInstalled = ClaudeSwapCLI.executable != nil
+                next.claudeSwapInstalled = self.claudeSwap != nil
                 self.publish(next)
             }
         }
     }
 
+    /// Codex only: claude-swap switches Claude accounts.
     func switchTo(_ account: ClaudeAccount) {
-        guard snapshot.switching == nil, let switcher = account.switcher else { return }
+        guard snapshot.switching == nil, account.kind == .codex, account.switcher == .liveIsland else { return }
         var next = snapshot
         next.switching = account.id
         next.message = nil
         publish(next)
-        let input = Worker.Input(mode: mode, codexSwitching: codexSwitching, claudeSwapInterval: 0)
+        let input = Worker.Input(claudeSwap: claudeSwap, codexSwitching: codexSwitching)
         queue.async { [weak self, worker] in
             let result: Result<String, Error>
             do {
-                switch switcher {
-                case .liveIsland where account.kind == .codex:
-                    let identity = try CodexLogins.switchTo(account.identity.key)
-                    result = .success("Codex now on \(identity.email)")
-                case .liveIsland:
-                    let identity = try ClaudeLogins.switchTo(account.identity.key)
-                    result = .success("Now on \(identity.displayName)")
-                case .claudeSwap:
-                    guard let number = account.claudeSwapNumber else { throw ClaudeSwapCLI.Failure.unreadable }
-                    _ = try ClaudeSwapCLI.switchTo(number)
-                    result = .success("Now on \(account.identity.displayName)")
-                }
+                let identity = try CodexLogins.switchTo(account.identity.key)
+                result = .success("Codex now on \(identity.email)")
             } catch {
                 log.error("Switch failed: \(error.localizedDescription, privacy: .public)")
                 result = .failure(error)
@@ -148,7 +116,20 @@ final class AccountsMonitor {
         }
     }
 
-    /// Forgets an account: its saved login and its row. The active account stays listed.
+    /// Shows the outcome of a claude-swap switch the same way as a Codex one.
+    func announce(_ message: String, isError: Bool) {
+        var next = snapshot
+        (next.message, next.messageIsError) = (message, isError)
+        publish(next)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            guard let self, self.snapshot.message == message else { return }
+            var cleared = self.snapshot
+            cleared.message = nil
+            self.publish(cleared)
+        }
+    }
+
+    /// Forgets an account: its row (and for Codex its saved login). The active account stays listed.
     func forget(_ account: ClaudeAccount) {
         queue.async { [weak self, worker] in
             worker.forget(account)
@@ -166,13 +147,11 @@ final class AccountsMonitor {
 /// The monitor's state, only ever touched on its queue.
 private final class Worker: @unchecked Sendable {
     struct Input {
-        var mode: AccountsMonitor.Switching
+        var claudeSwap: [ClaudeSwapAccount]?
         var codexSwitching: Bool
         var limits: ClaudeUsageLimits?
         var notice: ClaudeLimitNotice?
         var codexLimits: CodexLimits?
-        /// How long claude-swap's list stays fresh; 0 asks again now.
-        var claudeSwapInterval: TimeInterval
     }
 
     private var book: AccountBook
@@ -181,11 +160,7 @@ private final class Worker: @unchecked Sendable {
     private var recordedCodexLimits: Date?
     private var wasSavingCodex = false
     private var configModified: Date?
-    private var loginModified: Date?
-    private var lastLoginCheck = Date.distantPast
     private var recordedLimits: Date?
-    private var claudeSwap: [ClaudeSwapAccount]?
-    private var claudeSwapFetched = Date.distantPast
 
     private static func bookURL(_ name: String) -> URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -227,7 +202,6 @@ private final class Worker: @unchecked Sendable {
         }
         if codexBook != codexBefore { save(codexBook, as: "codex") }
         followActiveAccount(now: now)
-        if input.mode == .liveIsland { keepActiveLogin(now: now) }
         // A report that can't be placed yet is tried again on every tick: its reset times may
         // become known, or it may be repeated by a newer session.
         if let limits = input.limits, limits.observedAt != recordedLimits,
@@ -237,20 +211,9 @@ private final class Worker: @unchecked Sendable {
         if let notice = input.notice, notice.isLimitReached {
             book.record(notice, sessionStartedAt: started(notice.session))
         }
-        if input.mode == .claudeSwap {
-            if now.timeIntervalSince(claudeSwapFetched) >= input.claudeSwapInterval, ClaudeSwapCLI.executable != nil {
-                claudeSwapFetched = now
-                do {
-                    claudeSwap = try ClaudeSwapCLI.list()
-                } catch {
-                    log.error("claude-swap list failed: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        } else {
-            claudeSwap = nil
-        }
         if book != before { save(book, as: "claude") }
-        return (ClaudeAccounts.merge(book: book, claudeSwap: claudeSwap, switcher: input.mode.switcher, now: now),
+        let managed = input.claudeSwap.flatMap { $0.isEmpty ? nil : $0 }
+        return (ClaudeAccounts.merge(book: book, claudeSwap: managed, switcher: managed == nil ? nil : .claudeSwap, now: now),
                 CodexAccounts.list(book: codexBook, switching: input.codexSwitching, now: now))
     }
 
@@ -261,7 +224,6 @@ private final class Worker: @unchecked Sendable {
             codexBook.remove(key)
             save(codexBook, as: "codex")
         } else {
-            ClaudeLogins.forget(key)
             book.remove(key)
             save(book, as: "claude")
         }
@@ -299,29 +261,6 @@ private final class Worker: @unchecked Sendable {
         guard modified != configModified else { return }
         configModified = modified
         if let active = ClaudeLogins.active() { book.setActive(active.identity, at: now) }
-    }
-
-    /// Re-saves the active account's login whenever Claude Code changed it (a refresh, a
-    /// /login). A /login writes the Keychain first and ~/.claude.json a moment later, so the
-    /// login is saved under the account the config names only once the config was written
-    /// after it, or after a minute without changes (a refresh keeps the same account).
-    private func keepActiveLogin(now: Date) {
-        guard now.timeIntervalSince(lastLoginCheck) >= 15 else { return }
-        lastLoginCheck = now
-        guard let modified = SecurityTool.modified(service: ClaudeLogins.claudeService, account: ClaudeLogins.claudeAccount),
-              modified != loginModified, now.timeIntervalSince(modified) > 3,
-              now.timeIntervalSince(configModified ?? .distantPast) > 3,
-              (configModified ?? .distantPast) >= modified.addingTimeInterval(-1) || now.timeIntervalSince(modified) > 60
-        else { return }
-        do {
-            guard let saved = try ClaudeLogins.saveActive() else { return }
-            loginModified = modified
-            book.setActive(saved.identity, at: now)
-            book.entries[saved.identity.key]?.hasSavedLogin = true
-            book.entries[saved.identity.key]?.loginExpiresAt = saved.loginExpires
-        } catch {
-            log.error("Couldn't save the active login: \(error.localizedDescription, privacy: .public)")
-        }
     }
 
     private func save(_ book: AccountBook, as name: String) {

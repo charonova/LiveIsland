@@ -39,8 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.stop()
     }
 
-    /// liveisland:// links, e.g. from Shortcuts: open[/media|agents|activity|accounts[/claude|codex]|tasks], close,
-    /// settings[/general|island|media|agents|tasks|updates|about], update[/install], timer/<minutes>.
+    /// liveisland:// links, e.g. from Shortcuts: open[/media|agents|activity|accounts[/claude|codex]], close,
+    /// settings[/general|island|media|agents|accounts[/console]|updates|about], update[/install], timer/<minutes>.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme == "liveisland" {
             Logger(subsystem: "com.aissam.liveisland", category: "url").notice("Open \(url.absoluteString, privacy: .public)")
@@ -60,7 +60,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     await model.updater.check()
                     if install { await model.updater.install() }
                 }
-            case "settings": model.openSettings(detail.flatMap(SettingsSection.init(rawValue:)) ?? .general)
+            // settings/accounts/console scrolls to the console.
+            case "settings": model.openSettings(detail.flatMap(SettingsSection.init(rawValue:)) ?? .general,
+                                                anchor: parts.dropFirst(2).first?.lowercased())
             case "timer":
                 if let minutes = parts.dropFirst().first.flatMap(Double.init), minutes > 0 { model.startTimer(minutes: minutes) }
             default: break

@@ -7,7 +7,6 @@ enum IslandTab: String, CaseIterable, Identifiable {
     case agents = "Agents"
     case activity = "Activity"
     case accounts = "Accounts"
-    case tasks = "Tasks"
 
     var id: String { rawValue }
 
@@ -17,7 +16,6 @@ enum IslandTab: String, CaseIterable, Identifiable {
         case .agents: return "sparkles"
         case .activity: return "square.grid.2x2.fill"
         case .accounts: return "person.2.fill"
-        case .tasks: return "checklist"
         }
     }
 }
@@ -70,7 +68,10 @@ final class IslandModel: ObservableObject {
     @Published private(set) var isExpanded = false
     @Published private(set) var isHovering = false
     @Published var tab: IslandTab = .media {
-        didSet { accountsMonitor.isVisible = isExpanded && tab == .accounts }
+        didSet {
+            accountsMonitor.isVisible = isExpanded && tab == .accounts
+            claudeSwap.isVisible = isExpanded && tab == .accounts
+        }
     }
     /// Claude and Codex accounts and their limits.
     @Published private(set) var accountsState = AccountsMonitor.Snapshot()
@@ -96,20 +97,6 @@ final class IslandModel: ObservableObject {
     @Published var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: Key.hoverDelay) } }
     @Published var ambientGlow: Bool { didSet { save(ambientGlow, Key.glow) } }
     @Published var agentSounds: Bool { didSet { save(agentSounds, Key.sounds) } }
-    /// Tasks started from Settings continue on their own after a usage limit, at its reset.
-    @Published var keepTasksGoing: Bool {
-        didSet {
-            save(keepTasksGoing, Key.keepTasksGoing)
-            taskRunner.keepGoing = keepTasksGoing
-        }
-    }
-    /// …and move to another of the person's accounts when the task's own runs out.
-    @Published var switchAccountsForTasks: Bool {
-        didSet {
-            save(switchAccountsForTasks, Key.switchAccountsForTasks)
-            taskRunner.switching = switchAccountsForTasks
-        }
-    }
     /// Whether LiveIsland asks GitHub once a day for a newer version (it never installs on its own).
     @Published var checkForUpdates: Bool {
         didSet {
@@ -126,13 +113,6 @@ final class IslandModel: ObservableObject {
         didSet {
             save(liveWaveform, Key.waveform)
             levels.isEnabled = liveWaveform
-        }
-    }
-    /// How LiveIsland switches Claude accounts, if at all. Off until the user picks one.
-    @Published var accountSwitching: AccountsMonitor.Switching {
-        didSet {
-            defaults.set(accountSwitching.rawValue, forKey: Key.switching)
-            accountsMonitor.mode = accountSwitching
         }
     }
     /// Whether LiveIsland keeps Codex logins to switch between them. Off until turned on.
@@ -154,8 +134,7 @@ final class IslandModel: ObservableObject {
     let volume = OutputVolume()
     let levels = AudioLevelMeter()
     let updater = Updater()
-    let profileStore = ProfileStore()
-    lazy var taskRunner = TaskRunner(profiles: profileStore)
+    let claudeSwap = ClaudeSwapController()
     private let accountsMonitor = AccountsMonitor()
     private let scripted = ScriptedPlayers()
     private let agentMonitor = AgentMonitor()
@@ -173,8 +152,7 @@ final class IslandModel: ObservableObject {
         defaults.register(defaults: [Key.media: true, Key.agents: true, Key.calls: true, Key.devices: true,
                                      Key.calendar: true, Key.claude: true, Key.codex: true, Key.hover: true,
                                      Key.hoverDelay: 0.12, Key.glow: true, Key.sounds: false, Key.players: true,
-                                     Key.waveform: true, Key.updates: true, Key.keepTasksGoing: false,
-                                     Key.switchAccountsForTasks: false])
+                                     Key.waveform: true, Key.updates: true])
         showMedia = defaults.bool(forKey: Key.media)
         showAgents = defaults.bool(forKey: Key.agents)
         showCalls = defaults.bool(forKey: Key.calls)
@@ -188,11 +166,8 @@ final class IslandModel: ObservableObject {
         agentSounds = defaults.bool(forKey: Key.sounds)
         liveWaveform = defaults.bool(forKey: Key.waveform)
         checkForUpdates = defaults.bool(forKey: Key.updates)
-        keepTasksGoing = defaults.bool(forKey: Key.keepTasksGoing)
-        switchAccountsForTasks = defaults.bool(forKey: Key.switchAccountsForTasks)
         tabOrder = Ordering.restore(defaults.stringArray(forKey: Key.tabOrder) ?? [], all: IslandTab.allCases, name: \.rawValue)
         controlPlayers = defaults.bool(forKey: Key.players)
-        accountSwitching = defaults.string(forKey: Key.switching).flatMap(AccountsMonitor.Switching.init(rawValue:)) ?? .off
         codexSwitching = defaults.bool(forKey: Key.codexSwitching)
     }
 
@@ -210,13 +185,12 @@ final class IslandModel: ObservableObject {
         levels.isEnabled = liveWaveform
         updater.checksAutomatically = checkForUpdates
         updater.start()
-        taskRunner.keepGoing = keepTasksGoing
-        taskRunner.switching = switchAccountsForTasks
-        taskRunner.start()
         accountsMonitor.onUpdate = { [weak self] in self?.accountsState = $0 }
-        accountsMonitor.mode = accountSwitching
         accountsMonitor.codexSwitching = codexSwitching
         accountsMonitor.start()
+        claudeSwap.onAccounts = { [weak self] in self?.accountsMonitor.claudeSwap = $0 }
+        claudeSwap.onNotableEvent = { [weak self] in self?.announce($0) }
+        claudeSwap.start()
         if controlPlayers { scripted.start() }
         agentMonitor.start()
         systemMonitor.start()
@@ -231,8 +205,8 @@ final class IslandModel: ObservableObject {
         volume.stop()
         levels.stop()
         updater.stop()
-        taskRunner.stop()
         accountsMonitor.stop()
+        claudeSwap.stop()
         scripted.stop()
         agentMonitor.stop()
         systemMonitor.stop()
@@ -395,8 +369,34 @@ final class IslandModel: ObservableObject {
 
     var bestCodexAccount: ClaudeAccount? { ClaudeAccount.best(codexAccounts, at: clock) }
 
+    /// Claude accounts switch through claude-swap, Codex ones through LiveIsland.
     func switchAccount(_ account: ClaudeAccount) {
-        accountsMonitor.switchTo(account)
+        guard account.kind == .claude else { return accountsMonitor.switchTo(account) }
+        guard let number = account.claudeSwapNumber else { return }
+        Task {
+            await claudeSwap.switchTo(number)
+            let failed = claudeSwap.entries.last?.isError == true
+            accountsMonitor.announce(failed ? (claudeSwap.entries.last?.output.split(whereSeparator: \.isNewline).last.map(String.init) ?? "claude-swap couldn't switch")
+                                            : "Now on \(account.identity.displayName)", isError: failed)
+        }
+    }
+
+    /// claude-swap's automatic switching, in the notch: a switch, or every account running out.
+    private func announce(_ event: ClaudeSwapEvent) {
+        guard showAgents else { return }
+        switch event {
+        case .switched(_, _, let to, false):
+            let name = claudeSwap.accounts?.first { $0.number == to?.number }?.name ?? to?.email ?? "another account"
+            transient = .accountSwitched(to: name)
+        case .allExhausted, .quarantined, .error:
+            transient = .accountSwitched(to: event.summary)
+        default:
+            return
+        }
+        transientWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.transient = nil }
+        transientWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: work)
     }
 
     func forgetAccount(_ account: ClaudeAccount) {
@@ -521,6 +521,7 @@ final class IslandModel: ObservableObject {
         tab = requested ?? suggestedTab
         isExpanded = true
         accountsMonitor.isVisible = tab == .accounts
+        claudeSwap.isVisible = tab == .accounts
         if timerFinished { dismissTimerAlert() }
         // Spotify and Music don't say when someone seeks inside them; check while open.
         if controlPlayers {
@@ -537,6 +538,7 @@ final class IslandModel: ObservableObject {
     func collapse() {
         isExpanded = false
         accountsMonitor.isVisible = false
+        claudeSwap.isVisible = false
         hoveredSession = nil
         scrubbing = nil
         selectedPlayerID = nil
@@ -548,6 +550,7 @@ final class IslandModel: ObservableObject {
     private var suggestedTab: IslandTab {
         switch primary {
         case .agentNeedsYou, .agentDone, .agentWorking: return .agents
+        case .accountSwitched: return .accounts
         case .accountLimit(let account, _):
             accountsKind = account.hasPrefix("Codex") ? .codex : .claude
             return .accounts
@@ -564,7 +567,6 @@ final class IslandModel: ObservableObject {
         case .agents: return !sessions.isEmpty
         case .activity: return true
         case .accounts: return !accounts.isEmpty || !codexAccounts.isEmpty
-        case .tasks: return taskRunner.tasks.contains { !$0.isSettled || $0.state == .needsYou }
         }
     }
 
@@ -639,9 +641,9 @@ final class IslandModel: ObservableObject {
         launchAtLogin = LoginItem.isEnabled
     }
 
-    func openSettings(_ section: SettingsSection = .general) {
+    func openSettings(_ section: SettingsSection = .general, anchor: String? = nil) {
         collapse()
-        SettingsWindowController.shared.show(model: self, section: section)
+        SettingsWindowController.shared.show(model: self, section: section, anchor: anchor)
     }
 
     private func save(_ value: Bool, _ key: String) {
@@ -664,9 +666,6 @@ final class IslandModel: ObservableObject {
         static let waveform = "liveWaveform"
         static let tabOrder = "tabOrder"
         static let updates = "checkForUpdates"
-        static let keepTasksGoing = "keepTasksGoing"
-        static let switchAccountsForTasks = "switchAccountsForTasks"
-        static let switching = "accountSwitching"
         static let codexSwitching = "codexSwitching"
     }
 }

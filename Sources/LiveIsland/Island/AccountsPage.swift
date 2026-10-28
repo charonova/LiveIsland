@@ -19,7 +19,7 @@ struct AccountsPage: View {
                         .lineLimit(1)
                         .transition(.opacity)
                 }
-                Button { model.openSettings(.agents) } label: {
+                Button { model.openSettings(model.accountsKind == .claude ? .accounts : .agents) } label: {
                     Image(systemName: "slider.horizontal.3").font(.system(size: 11, weight: .semibold))
                         .frame(width: 24, height: 24).background(Circle().fill(.white.opacity(0.08))).contentShape(Circle())
                 }
@@ -49,9 +49,7 @@ struct AccountsPage: View {
                                 AccountRow(account: account, isBest: account.id == model.bestCodexAccount?.id)
                             }
                         } else {
-                            SectionHeader(kind: .claude,
-                                          detail: model.accountSwitching == .off ? "Switching off" : "Switch with \(model.accountSwitching.title)",
-                                          on: model.accountSwitching != .off)
+                            ClaudeSwapHeader(swap: model.claudeSwap)
                             ForEach(state.accounts) { account in
                                 AccountRow(account: account, isBest: account.id == model.bestAccount?.id)
                             }
@@ -91,6 +89,55 @@ private struct KindPicker: View {
         }
         .padding(2)
         .background(Capsule().fill(.white.opacity(0.06)))
+    }
+}
+
+/// Claude accounts are switched by claude-swap: whether it's there, and its automatic
+/// switching, one tap away.
+private struct ClaudeSwapHeader: View {
+    @EnvironmentObject private var model: IslandModel
+    @ObservedObject var swap: ClaudeSwapController
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if swap.executable == nil {
+                Button { model.openSettings(.accounts) } label: {
+                    Label("Set up claude-swap", systemImage: "arrow.left.arrow.right").font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 8).frame(height: 20).background(Capsule().fill(Color.purple.opacity(0.3)))
+                }
+                .buttonStyle(PressableStyle())
+                .help("claude-swap switches your Claude accounts: install it in Settings › Accounts")
+            } else {
+                Chip(text: "claude-swap", color: .purple)
+                Button { swap.autoSwitch.toggle() } label: {
+                    HStack(spacing: 4) {
+                        Circle().fill(running ? Color.green : .white.opacity(0.3)).frame(width: 6, height: 6)
+                        Text(swap.autoSwitch ? "Auto" : "Auto off").font(.system(size: 10, weight: .semibold, design: .rounded))
+                    }
+                    .padding(.horizontal, 8).frame(height: 18)
+                    .background(Capsule().fill((swap.autoSwitch ? Color.green : .white).opacity(swap.autoSwitch ? 0.18 : 0.08)))
+                    .foregroundStyle(swap.autoSwitch ? Color.green : .white.opacity(0.6))
+                }
+                .buttonStyle(PressableStyle())
+                .help(swap.autoSwitch ? "claude-swap switches before an account runs out. Tap to turn off." : "Let claude-swap switch before an account runs out")
+                Button { model.openSettings(.accounts, anchor: "console") } label: {
+                    Image(systemName: "terminal").font(.system(size: 9, weight: .bold))
+                        .frame(width: 20, height: 18).background(Capsule().fill(.white.opacity(0.08)))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .buttonStyle(PressableStyle())
+                .help("claude-swap's console: every command and its output")
+                if let last = swap.lastEvent, swap.autoSwitch {
+                    Text(last.summary).font(.system(size: 9.5)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var running: Bool {
+        if case .running = swap.auto { return true }
+        return false
     }
 }
 
@@ -159,9 +206,9 @@ private struct AccountRow: View {
             .liquidGlass(in: Capsule(), tint: isBest ? Color.orange.opacity(0.35) : nil, interactive: true)
             .disabled(model.accountsState.switching != nil)
             .help(isBest ? "The account with the most room" : "Use this account in \(account.kind.displayName)")
-        } else if account.kind == .codex ? model.codexSwitching : model.accountSwitching != .off {
-            Text("Not saved").font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.4))
-                .help(account.kind == .codex ? "Log in to it once with codex login so LiveIsland can switch to it" : "Log in to it once with /login so LiveIsland can switch to it")
+        } else if account.kind == .codex ? model.codexSwitching : model.accountsState.claudeSwapInstalled {
+            Text(account.kind == .codex ? "Not saved" : "Not in claude-swap").font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.4))
+                .help(account.kind == .codex ? "Log in to it once with codex login so LiveIsland can switch to it" : "Add it in Settings › Accounts")
         }
     }
 }

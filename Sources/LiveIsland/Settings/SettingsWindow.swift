@@ -3,7 +3,7 @@ import LiveIslandCore
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, island, media, agents, tasks, updates, about
+    case general, island, media, agents, accounts, updates, about
 
     var id: String { rawValue }
 
@@ -13,7 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return "Island"
         case .media: return "Media"
         case .agents: return "AI Agents"
-        case .tasks: return "Tasks"
+        case .accounts: return "Accounts"
         case .updates: return "Software Update"
         case .about: return "About"
         }
@@ -25,7 +25,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return "capsule.fill"
         case .media: return "music.note"
         case .agents: return "sparkles"
-        case .tasks: return "checklist"
+        case .accounts: return "person.2.fill"
         case .updates: return "arrow.triangle.2.circlepath"
         case .about: return "info"
         }
@@ -37,7 +37,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .island: return .indigo
         case .media: return .pink
         case .agents: return .orange
-        case .tasks: return .green
+        case .accounts: return .purple
         case .updates: return .teal
         case .about: return .blue
         }
@@ -47,6 +47,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 /// Which page the settings window shows (SwiftUI's @State needs Xcode's plugins here).
 final class SettingsNavigation: ObservableObject {
     @Published var section: SettingsSection? = .general
+    /// A place on the page to scroll to ("console"), once.
+    @Published var anchor: String?
 }
 
 /// One settings window, brought forward when asked for again.
@@ -56,8 +58,9 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private let navigation = SettingsNavigation()
 
-    func show(model: IslandModel, section: SettingsSection) {
+    func show(model: IslandModel, section: SettingsSection, anchor: String? = nil) {
         navigation.section = section
+        navigation.anchor = anchor
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 540),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -110,7 +113,7 @@ struct SettingsView: View {
                 case .island: IslandPage()
                 case .media: MediaSettingsPage()
                 case .agents: AgentsSettingsPage()
-                case .tasks: TasksSettingsPage()
+                case .accounts: ClaudeSwapPage()
                 case .updates: SoftwareUpdatePage(updater: model.updater)
                 case .about: AboutPage()
                 }
@@ -139,7 +142,7 @@ private struct SidebarHeader: View {
 }
 
 /// The big title at the top of each page.
-private struct PageHeader: View {
+struct PageHeader: View {
     let section: SettingsSection
     let detail: String
 
@@ -158,7 +161,7 @@ private struct PageHeader: View {
 }
 
 /// A toggle row with a colored icon, like System Settings.
-private struct ToggleRow: View {
+struct ToggleRow: View {
     let symbol: String
     let tint: Color
     let title: String
@@ -295,7 +298,6 @@ private struct TabOrderRow: View {
         case .agents: return .orange
         case .activity: return .blue
         case .accounts: return .purple
-        case .tasks: return .green
         }
     }
 }
@@ -617,241 +619,7 @@ private struct AboutUpdateLine: View {
     }
 }
 
-/// Claude Code tasks that keep going after a usage limit.
-private struct TasksSettingsPage: View {
-    @EnvironmentObject private var model: IslandModel
-
-    var body: some View {
-        Form {
-            Section { PageHeader(section: .tasks, detail: "Claude Code tasks that keep going on their own: after a usage limit resets, or on another of your accounts.") }
-            TaskAutomationSections(runner: model.taskRunner, profiles: model.profileStore)
-        }
-    }
-}
-
-/// Tasks that keep going after a usage limit: the switches, the accounts they may use, a form
-/// to start one, and each task's state with its controls.
-private struct TaskAutomationSections: View {
-    @EnvironmentObject private var model: IslandModel
-    @ObservedObject var runner: TaskRunner
-    @ObservedObject var profiles: ProfileStore
-
-    var body: some View {
-        Group {
-            Section {
-                ToggleRow(symbol: "arrow.clockwise.circle.fill", tint: .green, title: "Continue tasks after a usage limit",
-                          detail: "A task started below picks up again by itself when its account's limit resets, from where it stopped.",
-                          isOn: $model.keepTasksGoing)
-                ToggleRow(symbol: "person.2.circle.fill", tint: .orange, title: "Use my other accounts",
-                          detail: "When the task's account runs out, continue on the next account below that has room, instead of waiting.",
-                          isOn: $model.switchAccountsForTasks)
-                    .disabled(!model.keepTasksGoing)
-                Text("Anthropic's Consumer Terms forbid “bypassing any of our systems or protective measures”, and Claude Code's limits assume “ordinary, individual usage”. Anthropic doesn't say whether switching your own accounts automatically counts; if it decides it does, it could act on these accounts. LiveIsland only uses accounts you signed in to here through Claude Code itself, never touches their logins, and never turns on extra usage or an API key.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            } header: {
-                Text("Keep tasks going")
-            }
-            Section {
-                ForEach(Array(profiles.profiles.enumerated()), id: \.element.id) { index, profile in
-                    ProfileRow(profiles: profiles, profile: profile, index: index)
-                }
-                HStack {
-                    TextField("Name for another account", text: $profiles.newName)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { profiles.add() }
-                    Button("Add and Sign In") { profiles.add() }
-                        .disabled(profiles.newName.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            } header: {
-                Text("Accounts for tasks")
-            } footer: {
-                Text("Each account is its own Claude Code folder (Main is ~/.claude), signed in with `claude auth login` in Terminal. Claude Code keeps the login in your Keychain; LiveIsland only remembers the email and plan it reports. Tasks use them from the top down.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-            Section {
-                LabeledContent("Project") {
-                    HStack {
-                        Text(runner.draftFolder.isEmpty ? "None" : (runner.draftFolder as NSString).abbreviatingWithTildeInPath)
-                            .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                        Button("Choose…") { runner.chooseFolder() }
-                    }
-                }
-                TextField("What should Claude Code do?", text: $runner.draftObjective, axis: .vertical)
-                    .lineLimit(3...8)
-                Picker("Permissions", selection: $runner.draftMode) {
-                    Text("Accept edits").tag("acceptEdits")
-                    Text("Auto").tag("auto")
-                    Text("Ask (pause when something needs approval)").tag("default")
-                }
-                Picker("Start on", selection: $runner.draftProfile) {
-                    ForEach(profiles.profiles) { Text($0.name).tag($0.id) }
-                }
-                HStack {
-                    if let problem = runner.draftProblem {
-                        Text(problem).font(.system(size: 11)).foregroundStyle(.red)
-                    }
-                    Spacer()
-                    Button("Start Task") { runner.createFromDraft() }.glassButton(prominent: true)
-                }
-            } header: {
-                Text("New task")
-            } footer: {
-                Text("The task runs as `claude -p` in that folder, with these permissions. Nobody is there to approve anything new, so a step that needs approval pauses the task for you.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-            if !runner.tasks.isEmpty {
-                Section("Tasks") {
-                    ForEach(runner.tasks) { task in
-                        TaskRow(runner: runner, profiles: profiles, task: task)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// An account for tasks: on or off, its place in the order, and what LiveIsland knows of it.
-private struct ProfileRow: View {
-    @ObservedObject var profiles: ProfileStore
-    let profile: ClaudeProfile
-    let index: Int
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Toggle("", isOn: Binding(get: { profile.enabled }, set: { profiles.setEnabled(profile.id, $0) }))
-                .labelsHidden().toggleStyle(.switch).controlSize(.mini)
-                .help("Tasks may move to this account")
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(profile.name).font(.system(size: 13, weight: .semibold))
-                    if let plan = profile.plan {
-                        Text(plan).font(.system(size: 10, weight: .semibold)).padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(.quaternary))
-                    }
-                }
-                Text(status).font(.system(size: 11)).foregroundStyle(statusColor).lineLimit(2)
-            }
-            Spacer()
-            if profile.unusable != nil {
-                Button("Sign In") { profiles.signIn(profile) }
-            }
-            Menu {
-                Button("Check Sign-In") { Task { await profiles.refresh(profile.id) } }
-                Button("Sign In Again") { profiles.signIn(profile) }
-                if profile.id != ClaudeProfile.mainID {
-                    Divider()
-                    Button("Remove from LiveIsland") { profiles.remove(profile.id) }
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-            }
-            .menuStyle(.borderlessButton).fixedSize()
-            Button { profiles.move(profile.id, by: -1) } label: { Image(systemName: "chevron.up") }
-                .disabled(index == 0).help("Use earlier")
-            Button { profiles.move(profile.id, by: 1) } label: { Image(systemName: "chevron.down") }
-                .disabled(index == profiles.profiles.count - 1).help("Use later")
-        }
-        .buttonStyle(.borderless)
-    }
-
-    private var status: String {
-        let now = Date()
-        if let reason = profile.unusable { return reason }
-        if let other = profiles.duplicate(of: profile) { return "\(profile.email ?? "") · same account as \(other.name)" }
-        let who = [profile.email, profile.configDir.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "~/.claude"]
-            .compactMap { $0 }.joined(separator: " · ")
-        if let until = profile.exhaustedUntil, until > now { return "Out of usage until \(TaskTime.text(until)) · \(who)" }
-        if let since = profile.exhaustedSince, now.timeIntervalSince(since) < AccountRotation.unknownResetRetry {
-            return "Out of usage, reset time not reported · tried again at \(TaskTime.text(since.addingTimeInterval(AccountRotation.unknownResetRetry)))"
-        }
-        return "Ready · \(who)"
-    }
-
-    private var statusColor: Color {
-        if profile.unusable != nil || profiles.duplicate(of: profile) != nil { return .red }
-        if AccountRotation.isAvailable(profile, at: Date()) { return .secondary }
-        return .orange
-    }
-}
-
-/// A task: what it does, where it stands and why, what happens next, and the controls.
-private struct TaskRow: View {
-    @ObservedObject var runner: TaskRunner
-    @ObservedObject var profiles: ProfileStore
-    let task: AutomationTask
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                badge
-                Text(task.objective).font(.system(size: 13, weight: .semibold)).lineLimit(2)
-                Spacer()
-            }
-            Text(details).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(3)
-            HStack(spacing: 8) {
-                switch task.state {
-                case .running:
-                    Button("Pause") { runner.pause(task.id) }
-                    Button("Cancel") { runner.cancel(task.id) }
-                    switchMenu
-                case .waiting:
-                    Button("Continue Now") { runner.resume(task.id) }
-                    Button("Pause") { runner.pause(task.id) }
-                    Button("Cancel") { runner.cancel(task.id) }
-                    switchMenu
-                case .paused, .needsYou:
-                    Button("Resume") { runner.resume(task.id) }
-                    Button("Cancel") { runner.cancel(task.id) }
-                    switchMenu
-                case .done, .cancelled:
-                    Button("Remove") { runner.remove(task.id) }
-                }
-                Spacer()
-                Button("Show Folder") { NSWorkspace.shared.open(URL(fileURLWithPath: task.folder)) }
-            }
-            .controlSize(.small)
-        }
-        .padding(.vertical, 3)
-    }
-
-    private var switchMenu: some View {
-        Menu("Switch Account") {
-            ForEach(profiles.profiles.filter { $0.id != task.profileID }) { profile in
-                Button(profile.name) { runner.switchAccount(task.id, to: profile.id) }
-            }
-        }
-        .fixedSize()
-    }
-
-    private var badge: some View {
-        let (label, color): (String, Color) = {
-            switch task.state {
-            case .running: return ("Running", .green)
-            case .waiting: return ("Waiting", .orange)
-            case .paused: return ("Paused", .gray)
-            case .needsYou: return ("Needs you", .yellow)
-            case .done: return ("Done", .green)
-            case .cancelled: return ("Cancelled", .gray)
-            }
-        }()
-        return Text(label).font(.system(size: 10, weight: .bold)).foregroundStyle(color)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Capsule().fill(color.opacity(0.15)))
-    }
-
-    private var details: String {
-        var parts = [(task.folder as NSString).abbreviatingWithTildeInPath, profiles.name(of: task.profileID)]
-        if task.attempts.count > 1 { parts.append("run \(task.attempts.count)") }
-        var text = parts.joined(separator: " · ") + "\n" + task.reason
-        if task.state == .waiting, let next = task.nextAttemptAt {
-            text += " · next: \(TaskTime.text(next)) on \(profiles.name(of: task.profileID))"
-        }
-        if task.attempts.last?.kind == "handoff" { text += " · new conversation from saved progress" }
-        return text
-    }
-}
-
-/// Times for tasks and accounts, with their time zone, so a reset isn't misread.
+/// Times for accounts, with their time zone, so a reset isn't misread.
 enum TaskTime {
     static func text(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -868,83 +636,23 @@ enum TaskTime {
 }
 
 /// Claude accounts: how to switch between them, and the ones LiveIsland knows.
+/// Claude accounts live on their own page now, switched by claude-swap.
 private struct AccountsSettingsSection: View {
     @EnvironmentObject private var model: IslandModel
 
     var body: some View {
         Section {
-            LabeledContent {
-                Picker("Switch accounts with", selection: $model.accountSwitching) {
-                    ForEach(AccountsMonitor.Switching.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
+            HStack(spacing: 10) {
+                IconBadge(symbol: "person.2.fill", tint: .purple, size: 26)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Claude accounts")
+                    Text("Switched by claude-swap, by hand or automatically").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 260)
-            } label: {
-                HStack(spacing: 10) {
-                    IconBadge(symbol: "person.2.fill", tint: .indigo, size: 26)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Switch accounts with")
-                        Text("Only when you tap Switch, never on its own").font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                }
+                Spacer()
+                Button("Open Accounts") { model.openSettings(.accounts) }
             }
-            Text(explanation).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if model.accountSwitching == .claudeSwap && !model.accountsState.claudeSwapInstalled {
-                Label("claude-swap isn't installed. In a terminal: uv tool install claude-swap", systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12)).foregroundStyle(.orange).textSelection(.enabled)
-            }
-            ForEach(model.accounts) { account in
-                HStack(spacing: 10) {
-                    AccountAvatar(identity: account.identity, size: 28)
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
-                            Text(account.identity.displayName)
-                            if account.isActive { Text("In use").font(.system(size: 10, weight: .semibold)).foregroundStyle(.green) }
-                        }
-                        Text([account.identity.email, account.identity.plan].compactMap { $0 }.joined(separator: " · "))
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text(status(account)).font(.system(size: 11)).foregroundStyle(.secondary)
-                    if account.switcher == .liveIsland || !account.isActive {
-                        Button("Forget") { model.forgetAccount(account) }
-                            .help(account.isActive ? "Delete LiveIsland's saved copy of this login" : "Remove this account and LiveIsland's saved login")
-                    }
-                }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Add an account: run /login in Claude Code and sign in to it. Don't use /logout: it can cancel the saved login of the account you leave.",
-                      systemImage: "person.badge.plus")
-                Label("New Claude Code sessions use the new account. Sessions already running can keep the previous one: restart them (claude --continue picks up where you left off).", systemImage: "clock")
-                Label("Use one switcher at a time. Each keeps its own copy of every login, and Claude Code replaces a login when it refreshes it, so the other copy goes stale.",
-                      systemImage: "exclamationmark.arrow.triangle.2.circlepath")
-            }
-            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         } header: {
             Text("Claude accounts")
-        }
-    }
-
-    private var explanation: String {
-        switch model.accountSwitching {
-        case .off:
-            return "LiveIsland shows each account you use and its limits, and tells you when the one in use runs out. Switching stays with you."
-        case .liveIsland:
-            return "LiveIsland keeps each account's Claude login in your login Keychain, and puts it in place when you tap Switch. Your MCP logins stay as they are, and nothing leaves your Mac."
-        case .claudeSwap:
-            return "LiveIsland asks claude-swap to switch and shows its usage for every account. LiveIsland itself never touches a login. Add accounts with `cswap add` after /login."
-        }
-    }
-
-    private func status(_ account: ClaudeAccount) -> String {
-        if account.needsLogin { return "Sign in again" }
-        switch account.switcher {
-        case .liveIsland: return "Login saved"
-        case .claudeSwap: return "In claude-swap"
-        case nil: return model.accountSwitching == .off ? "" : "Not saved yet"
         }
     }
 }
