@@ -6,20 +6,20 @@
 
 ### Your Claude Code work doesn't stop at a usage limit.
 
-**A Dynamic Island for the Mac's notch that keeps your Claude Code tasks going across your accounts, and shows what's playing, who's working, and how much room each account has left.**
+**A Dynamic Island for the Mac's notch that moves Claude Code to your next account before the one in use runs out, through claude-swap, and shows what's playing, who's working, and how much room each account has left.**
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-112%20passing-success)
+![Tests](https://img.shields.io/badge/tests-95%20passing-success)
 
 <br>
 
-<img src="demo/island-tasks.png" width="760" alt="The island's Tasks tab: one task moved from Main to Work when Main ran out and is working, one tries again while Anthropic is busy, one waits for an approval; beside them, three accounts with when each resets">
+<img src="demo/island-accounts.png" width="760" alt="The island's Accounts tab: claude-swap with automatic switching on, which just moved from main to Work; three accounts with their 5-hour and weekly use and when each resets">
 
-<sub>Main ran out, so the first task moved to Work and kept going. One task tries again while Anthropic is busy, one waits for your approval.</sub>
+<sub>Main reached 88% of its 5-hour limit, so claude-swap moved Claude Code to Work, and every running session followed.</sub>
 
-**[Install](#install)** · **[How tasks keep going](#tasks-that-keep-going)** · **[Screenshots](#screenshots)** · **[Features](#features)**
+**[Install](#install)** · **[Accounts with claude-swap](#accounts-with-claude-swap)** · **[Screenshots](#screenshots)** · **[Features](#features)**
 
 </div>
 
@@ -31,21 +31,21 @@ You hand Claude Code a long job and walk away. Forty minutes later it has stoppe
 
 > You've hit your session limit · resets 3:45pm
 
-Nothing happens until you come back, sign in to another account and type "continue", and then explain where it was. If you pay for more than one account, the others sit idle the whole time. And the notch, a black bar in the middle of your screen, tells you none of this.
+Nothing happens until you come back, sign in to another account and type "continue". If you pay for more than one account, the others sit idle the whole time. And the notch, a black bar in the middle of your screen, tells you none of this.
 
 ## The solution
 
 LiveIsland turns the notch into a Dynamic Island that keeps an eye on your work for you.
 
-- **Tasks keep going.** When the account a task runs on hits its 5-hour or weekly limit, LiveIsland continues the *same conversation*: as soon as the limit resets, or right away on the next of your accounts that has room. No signing in, no "continue", nothing to explain again.
-- **Everything at a glance.** Which agent is working or waiting for you, how much of each account's limits is left and when it resets, what's playing, with a waveform that moves to the music.
+- **It switches before you hit the wall.** LiveIsland runs [claude-swap](https://github.com/realiti4/claude-swap), which checks all your accounts every minute and moves Claude Code to the one with the most room when the account in use nears its limit. Every session follows within about 30 seconds: Terminal, VS Code, anywhere. Nothing stops, so there's nothing to resume.
+- **Everything at a glance.** Which agent is working or waiting for you, how much of each account's 5-hour and weekly limits is left and when it resets, what's playing, with a waveform that moves to the music.
 - **It stays out of the way.** It opens on hover, clicks pass straight through, and it uses under 1% of one core when closed.
 
 ### Three steps
 
-| 1. Sign in once | 2. Start a task | 3. Walk away |
+| 1. Install claude-swap | 2. Add your accounts | 3. Turn on automatic switching |
 |---|---|---|
-| Add your accounts in **Settings › Tasks**. Claude Code signs in to each one itself, and LiveIsland never sees a login | Pick the project folder, say what to do, choose its permissions | When an account runs out, the task moves on or waits for the reset. Follow it from the island's **Tasks** tab |
+| **Settings › Accounts › Install** puts it in place with uv, and **Update** keeps it current | **Add and Sign In** opens Claude Code's own sign-in for each one, then adds it to claude-swap. LiveIsland never sees a login | **Switch automatically**: claude-swap moves to the next account before the one in use runs out. Watch it from the island or the console |
 
 ## Screenshots
 
@@ -72,7 +72,7 @@ LiveIsland turns the notch into a Dynamic Island that keeps an eye on your work 
   </tr>
   <tr>
     <td align="center" colspan="3">
-      <img src="demo/settings-agents.png" width="560" alt="Settings window, AI Agents page: agent toggles, sound, and how to switch Claude accounts"><br>
+      <img src="demo/settings-agents.png" width="560" alt="Settings window, AI Agents page: agent toggles and sound"><br>
       <sub><b>Settings</b><br>Everything, in one window</sub>
     </td>
   </tr>
@@ -80,11 +80,12 @@ LiveIsland turns the notch into a Dynamic Island that keeps an eye on your work 
 
 ## Features
 
-**Tasks that keep going**
-- Start a Claude Code task in **Settings › Tasks** and leave: when its account hits a usage limit, it continues from where it stopped once the limit resets, or, if you turn it on, right away on another of your accounts
-- Your accounts in the order you choose, each one's state and next reset; an account known to be out is never tried before its reset
-- The island's **Tasks** tab: every task, its account, why it stopped and what happens next, with Pause, Continue, Switch Account and Cancel
-- It pauses for you when something needs your approval, and never runs a conversation twice
+**Accounts that don't run out**
+- [claude-swap](https://github.com/realiti4/claude-swap), installed, updated and run from LiveIsland: every account's 5-hour and weekly use, its reset times and when it will run out at this pace
+- **Automatic switching** before the account in use runs out, to the one with the most room, with your own switch points, strategy and cooldown
+- Every claude-swap command one click away: switch, keep out of rotation, rename, switch point, order, remove, add
+- **Add and Sign In**: a new account signs in with Claude Code's own sign-in and lands in claude-swap by itself
+- A **console** with every command LiveIsland ran, its output, and every automatic switch as it happens; type any other `cswap` command there
 
 **Now Playing**
 - Works with any app that plays audio or video: Spotify, Music, browsers, podcasts…
@@ -100,7 +101,7 @@ LiveIsland turns the notch into a Dynamic Island that keeps an eye on your work 
 - **Jump to the session** in the app it runs in: VS Code, Cursor, Antigravity or Windsurf (the right window), Terminal or iTerm2 (the exact tab)
 - Copy the command that resumes a session
 - **Usage limits as rings**: Claude Code's real 5-hour and weekly percentages (one click to set up, see below), Codex's 5-hour and weekly limits, tokens this window and today
-- **Several Claude and Codex accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching, also from the menu bar (see below)
+- **Several Claude and Codex accounts**: each one's limits side by side, an alert in the notch when the account in use runs out, and one-tap switching, also from the menu bar
 - Optional sound when an agent finishes or stops to ask you something
 
 **Calls, devices and the rest**
@@ -113,7 +114,7 @@ LiveIsland turns the notch into a Dynamic Island that keeps an eye on your work 
 
 **Everyday use**
 - Opens on hover (or click), closes when you move away; clicks pass straight through everywhere else
-- **Your tab order**: put Media, Agents, Activity, Accounts and Tasks in the order you like (Settings › Island). Beside a wide notch, the tabs show icons only rather than slide under the camera
+- **Your tab order**: put Media, Agents, Activity and Accounts in the order you like (Settings › Island). Beside a wide notch, the tabs show icons only rather than slide under the camera
 - **Software Update** in Settings: see what's new and update in one click. It checks GitHub once a day (you can turn that off) and never installs on its own
 - Settings window, menu bar panel, Open at Login, `liveisland://` links for Shortcuts
 - Liquid Glass on macOS 26+, with a material fallback on earlier systems
@@ -125,81 +126,36 @@ Claude Code shares its 5-hour and weekly percentages only with its status line. 
 
 Prefer to do it yourself? The lines are in [`scripts/claude-statusline-snippet.sh`](scripts/claude-statusline-snippet.sh). They go inside the status line script; typed into a terminal they do nothing. Without them, the island still shows Claude Code's tokens for the current 5-hour window and for today, counted from its transcripts.
 
-## Claude and Codex accounts
+## Accounts with claude-swap
 
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="demo/island-accounts.png" alt="Accounts tab on Claude Code: three accounts with their plan, 5-hour and weekly bars, reset times, and Switch buttons; the one with the most room is starred"><br>
-      <sub><b>Claude Code</b><br>Every account's limits; ★ marks the one with the most room</sub>
+      <img src="demo/settings-accounts.png" alt="Settings, Accounts page: claude-swap 0.29.0, automatic switching on with its switch points and strategy, and three accounts with their use, Switch buttons and menus"><br>
+      <sub><b>Settings › Accounts</b><br>claude-swap, its automatic switching, every account</sub>
     </td>
     <td align="center" width="50%">
-      <img src="demo/island-accounts-codex.png" alt="Accounts tab on Codex: the ChatGPT account in use, its Pro Lite plan and its weekly limit"><br>
-      <sub><b>Codex</b><br>ChatGPT logins, with their plan and limits</sub>
+      <img src="demo/console.png" alt="The console: cswap auto starting, a switch from main to work, every account out until 14:30, a crash and LiveIsland starting it again"><br>
+      <sub><b>The console</b><br>Every command, switch and restart, as text</sub>
     </td>
   </tr>
 </table>
 
-Use more than one account? The **Accounts** tab lists every account Claude Code and Codex have used on this Mac, with its plan and its 5-hour and weekly limits; a Claude Code | Codex switch at the top picks the list. When the account in use runs out, the notch says so and points to the one with the most room. LiveIsland never switches on its own: you tap **Switch**.
+[claude-swap](https://github.com/realiti4/claude-swap) (MIT) keeps a login for each of your Claude accounts and puts the one in use in place for Claude Code. LiveIsland runs it, shows what it says, and never reads a login itself.
 
-Choose how Claude accounts switch in **Settings › AI Agents**:
+**Set it up** in **Settings › Accounts**:
 
-| | |
-|---|---|
-| **Off** (default) | Limits and alerts only. You switch with `/login` in Claude Code. |
-| **LiveIsland** | LiveIsland keeps a copy of each account's login in your login Keychain and puts it in place when you tap Switch. Only the Claude login changes: your MCP server logins stay as they are. It holds Claude Code's own locks while it switches, so a login refresh can't collide with it. New Claude Code sessions use the new account; sessions already running can keep the previous one until you restart them (`claude --continue` picks up where you left off). |
-| **claude-swap** | LiveIsland asks [claude-swap](https://github.com/realiti4/claude-swap) to switch and shows its live usage for every account. LiveIsland itself never touches a login. |
+1. **Install.** If claude-swap isn't there, **Install** runs `uv tool install claude-swap` (pipx, or Homebrew's uv, when uv is missing). **Update to …** appears when claude-swap offers a newer version.
+2. **Add your accounts.** **Add the Account Claude Code Uses Now** adds the one you're signed in to. For each other account, type a name and click **Add and Sign In**: Terminal opens on Claude Code's own `claude auth login`, in a folder of its own under `~/.claude-accounts`, so the account you use now stays as it is; once you've signed in, LiveIsland runs `cswap add` for it. Don't sign those folders out later: claude-swap holds the same logins, and signing out cancels them.
+3. **Switch automatically.** LiveIsland runs `cswap auto --json` while it's open, starts it again if it ever stops, and shows each switch in the notch. Set the switch point for the 5-hour and the weekly limit, how long to wait between switches, and whether to pick the account with the most room or the soonest weekly reset.
 
-To add an account, run `/login` in Claude Code and sign in to it (a private browser window helps if you're signed in to claude.ai as someone else). Avoid `/logout`: it can cancel the saved login of the account you leave. Use one switcher at a time, since each keeps its own copy of every login.
+The island's **Accounts** tab lists claude-swap's accounts with their use and reset times, a **Switch** button on each (★ marks the one with the most room), the **Auto** switch, and a button to the console. Each account's menu in Settings keeps it out of automatic rotation, renames it, sets its own switch point, moves it up or down, or removes it.
 
-**Codex accounts** work the same way: the Accounts page has a Claude Code | Codex switch, and **Settings › AI Agents** has *Switch Codex accounts with LiveIsland* (off by default). LiveIsland then keeps a copy of each Codex login in its own folder, readable only by you, the same way Codex keeps its own in `~/.codex/auth.json`, and puts it in place when you tap Switch. Codex refuses to save a refreshed login over another account's, so a running session can't undo a switch. Add accounts with `codex login`; avoid `codex logout`, which cancels the login.
+**The console** shows every command LiveIsland ran with its full output and exit code, and every automatic switch, refusal and restart as it happens (tick *Show every check* for the minute-by-minute checks). Type any other `cswap` command below it: it runs claude-swap directly, never through a shell. **Dashboard** opens claude-swap's own dashboard in Terminal. `liveisland://settings/accounts/console` opens it.
 
-LiveIsland learns a Claude account's limits from the status line while you use it, and from the limit Claude reports when it refuses a request; a Codex account's come from the limits Codex writes in each session. Each report names the session it came from, and a session keeps the login it started with, so numbers land on an account only when that's certain: the session started after the latest switch, or the numbers match that account's own reset times. An account you aren't using keeps its last numbers, and a window that has reset counts from zero. (Added the status line lines with an earlier version? Settings › AI Agents offers to update them.)
+Anthropic doesn't say whether switching your own accounts automatically is allowed: its Consumer Terms forbid "bypassing any of our systems or protective measures", and Claude Code's limits assume "ordinary, individual usage". Automatic switching stays off until you turn it on. Accounts that bill an API key stay out of rotation unless you change claude-swap's settings.
 
-## Tasks that keep going
-
-<table>
-  <tr>
-    <td align="center" width="45%">
-      <img src="demo/settings-tasks.png" alt="Settings, Tasks page: the switches to continue after a limit and to use other accounts, four accounts in order with their reset times, and the New task form"><br>
-      <sub><b>Settings › Tasks</b><br>The switches, your accounts in order, a new task</sub>
-    </td>
-    <td align="center" width="55%">
-      <img src="demo/tasks-list.png" alt="Three tasks: one waiting for its account's weekly limit to reset, one paused because a step needs approval, one done after moving to another account"><br>
-      <sub><b>Each task</b><br>Where it stands, why, and what happens next</sub>
-    </td>
-  </tr>
-</table>
-
-Start a Claude Code task from **Settings › Tasks**, leave your Mac on, and LiveIsland keeps it going. When the account it runs on hits its 5-hour or weekly limit, the task picks up where it stopped once the limit resets, or, if you allow it, right away on another of your accounts.
-
-**Set it up**
-
-1. **Accounts.** *Main* is the account plain `claude` uses (`~/.claude`). To add another, type a name and click **Add and Sign In**: Terminal opens on Claude Code's own `claude auth login` for a new folder in `~/.claude-accounts`, and the row fills in once you've signed in. Turn each account on or off for tasks, and use the arrows to set the order they're used in.
-2. **Switches.** **Continue tasks after a usage limit** waits for the reset; **Use my other accounts** moves to the next account with room instead. Both stay off until you turn them on.
-3. **A task.** Choose the project folder, describe the work, pick the permissions (*Accept edits*, *Auto*, or *Ask*) and the account to start on, then click **Start Task**.
-
-**When a run stops**
-
-| The run ended because… | LiveIsland… |
-|---|---|
-| it finished | marks the task Done |
-| the account hit its 5-hour or weekly limit | notes when that account resets, from Claude Code's own record of the refusal, then continues on the next account with room, or waits for the earliest reset. It never retries an account it knows is out |
-| Anthropic was busy or unreachable | tries again on the same account, waiting a little longer each time |
-| the account needs signing in again | sets it aside and moves on, or asks you to sign in |
-| a step needed an approval nobody could give | pauses the task as **Needs you**, naming the step |
-| you paused or cancelled it | stops. A cancelled task never starts again |
-
-Follow your tasks from the island's **Tasks** tab: each task with its account, why it stopped and what happens next, with Pause, Continue, Switch Account and Cancel, and beside them your accounts in order, with when each one resets. Starting a task and adding accounts stay in Settings.
-
-A task continues the same conversation with `claude --resume`: by its session on the same account, and by its transcript file on another, since each account keeps its own session list. If a conversation can't be resumed, a new one starts, briefed from the task's checkpoint (the files it changed, its last command and whether it passed, its last message), and the task says so. Before every run, LiveIsland checks that no other `claude` process has the conversation open, so a task never runs twice. Each task has **Pause**, **Cancel**, **Resume**, **Continue Now** and **Switch Account**.
-
-**Good to know**
-
-- LiveIsland never sees a login: each account's sign-in stays in Claude Code's own Keychain entry for its folder. Runs get no API key or token from LiveIsland, so nothing is billed to an API key, and LiveIsland never turns on extra usage.
-- Tasks run as `claude -p` in the folder you chose, with the permissions you picked. A step outside them pauses the task; it never asks for more.
-- Only tasks started here keep going. For sessions you run yourself in Terminal or an editor, Claude Code can wait for the reset on its own: turn on *Continue automatically at usage limit* in `/config`. Claude Desktop isn't supported.
-- Anthropic doesn't say whether switching your own accounts automatically is allowed. Its Consumer Terms forbid "bypassing any of our systems or protective measures", and Claude Code's limits assume "ordinary, individual usage". Decide for yourself before turning on **Use my other accounts**.
+**Codex accounts** switch through LiveIsland itself: the Accounts tab has a Claude Code | Codex switch, and **Settings › AI Agents** has *Switch Codex accounts with LiveIsland* (off by default). LiveIsland keeps a copy of each Codex login in its own folder, readable only by you, the same way Codex keeps its own in `~/.codex/auth.json`, and puts it in place when you tap Switch. Add accounts with `codex login`; avoid `codex logout`, which cancels the login.
 
 ## How it works
 
@@ -209,13 +165,12 @@ A task continues the same conversation with `claude --resume`: by its session on
 | Spotify and Music | Their own "track changed" notifications, and AppleScript for details and controls. LiveIsland never scripts an app that isn't running, since that would open it |
 | Claude Code and Codex | Their session files (`~/.claude/projects`, `~/.codex/sessions`), watched with FSEvents. Transcripts can be gigabytes, so only new bytes are read |
 | Where a session runs | The process table: each agent's folder and terminal, and the app above it |
-| Claude accounts | Who's logged in from `~/.claude.json`; logins (only when you choose LiveIsland switching) through the system `security` tool, the way Claude Code itself stores them |
+| Claude accounts | claude-swap's `cswap list --json` (every account's use), `cswap auto --json` (each switch as it happens) and its other commands; who Claude Code is logged in as from `~/.claude.json`. LiveIsland never reads a login |
 | Codex accounts | Who's logged in, and the plan, from `~/.codex/auth.json`; limits from the `rate_limits` Codex writes in each session; logins (only when you turn on Codex switching) as private copies of that file in `~/Library/Application Support/LiveIsland` |
 | Microphone, camera, calls | Core Audio's process list and CoreMediaIO. Only *whether* they're in use, never what they hear or see |
 | Waveform | A Core Audio process tap on what the Mac plays (macOS 14.2+), only while music plays and the bars are on screen. It only listens: the sound is never changed, muted, recorded or stored, just measured band by band |
 | Battery, AirPods | IOKit power notifications; IOBluetooth and `system_profiler` for AirPods levels |
 | Calendar | EventKit, read only |
-| Tasks | `claude -p` with stream-json output, in the task's folder and permission mode. Each account is a Claude Code profile (`CLAUDE_CONFIG_DIR`) that Claude Code itself signs in to with `claude auth login`; LiveIsland keeps only the profile's folder, email and plan. A usage limit and its reset time come from the `rate_limit_info` Claude Code writes in the transcript. A run continues the same conversation with `--resume`, by session ID on the same account and by the transcript's path on another, and never starts while another `claude` process has that conversation open |
 | Updates | This repository's latest GitHub release, at most once a day. A new version must match its SHA-256, be LiveIsland at the version promised and pass `codesign --verify` before it replaces the app |
 
 ## Performance
@@ -258,7 +213,7 @@ macOS will ask for:
 - **Bluetooth**, for AirPods battery
 - **Automation** for Spotify and Music (now playing and controls), and for Terminal or iTerm2 the first time you jump to a session there
 - **System audio recording**, for the live waveform, the first time music plays. Without it the island shows the animated symbol; you can turn the waveform off in Settings › Media
-- Nothing for Claude or Codex accounts: switching is off until you turn it on, the Keychain items it uses are written by the system `security` tool, and Codex logins are plain files in LiveIsland's own folder
+- Nothing for accounts: claude-swap keeps the Claude logins in your Keychain itself, and Codex logins are private files in LiveIsland's own folder
 
 Everything works without any of them; the matching feature just stays empty.
 
@@ -273,25 +228,25 @@ Everything works without any of them; the matching feature just stays empty.
 LIVEISLAND_REAL_DATA=1 ./scripts/test.sh -c release --filter RealData   # read your own transcripts, timed
 ```
 
-The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, the tab order (kept as tabs come and go), software updates (versions compared number by number, GitHub's release answer, checksums), tasks (how a run ended: a usage limit with or without a reset time, throttling, network, signing in, approvals; the account chosen next, never one known to be out; waiting for the earliest reset; cancelling; one run per conversation; the checkpoint and the prompts that continue from it), timers, session resume commands and editor window matching. For accounts: editing `~/.claude.json` without touching anything but `oauthAccount`, replacing the Claude login while keeping MCP logins, filing each status line report under the right account after a switch, limits from refused requests, the account with the most room, and reading claude-swap's output. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
+The tests cover the transcript and rollout parsers, the incremental usage ledger (appends, truncation, replaced files, duplicate messages), 5-hour windows, limit notices that go stale, Claude Code's status line limits, now-playing stream updates, the waveform's bands (bass and treble in the right bars, a beat shows as movement, a quiet track moves like a loud one, silence stays flat), activity priorities, the tab order (kept as tabs come and go), software updates (versions compared number by number, GitHub's release answer, checksums), timers, session resume commands and editor window matching. For accounts: filing each status line report under the right account after a switch, limits from refused requests, the account with the most room (never one nearly full), and claude-swap: its accounts list, settings, version and update notices, every kind of `auto` event (unknown ones kept), the list LiveIsland shows (exactly claude-swap's), and typed commands split without a shell, with the ones that need a terminal turned away. For Codex: who a login belongs to (from its ID token), ChatGPT plan names, Codex limits in the account book, and listing Codex accounts apart from Claude ones.
 
 ## Automation
 
 | Link | Action |
 |---|---|
 | `liveisland://open` · `close` | Open or close the island |
-| `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity`, `accounts` (`accounts/codex` for the Codex list) or `tasks` |
+| `liveisland://open/accounts` | Open it on a page: `media`, `agents`, `activity` or `accounts` (`accounts/codex` for the Codex list) |
 | `liveisland://timer/5` | Start a 5-minute timer |
 | `liveisland://update` · `update/install` | Check for a new version, and install it |
-| `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `tasks`, `updates`, `about` |
+| `liveisland://settings` · `settings/agents` | Open Settings, or one of its pages: `general`, `island`, `media`, `agents`, `accounts`, `updates`, `about` (`accounts/console` for claude-swap's console) |
 
 ## Privacy
 
-LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. The waveform measures the sound in memory and never records or keeps it. Its only network requests download Spotify's cover art, from the address Spotify itself gives, and ask GitHub once a day whether a newer LiveIsland is out (turn that off in Settings › Software Update). Tasks run Claude Code on your Mac with your own accounts; their checkpoints stay in `~/Library/Application Support/LiveIsland/automation`, and runs never get an API key or token from LiveIsland's environment, so nothing is billed to an API key behind your back.
+LiveIsland has no analytics and no accounts. Transcripts, calendar events and everything else stay on your Mac. The waveform measures the sound in memory and never records or keeps it. Its only network requests download Spotify's cover art, from the address Spotify itself gives, and ask GitHub once a day whether a newer LiveIsland is out (turn that off in Settings › Software Update). claude-swap asks Anthropic for each account's use, as it does on its own; LiveIsland runs it and keeps its output only in memory, for the console.
 
 ## Credits
 
-Now playing uses [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) by ungive (BSD-3-Clause), vendored in `ThirdParty/`. Claude Code, Codex, Spotify and the other apps named here belong to their owners; LiveIsland isn't affiliated with them.
+Now playing uses [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) by ungive (BSD-3-Clause), vendored in `ThirdParty/`. Account switching is [claude-swap](https://github.com/realiti4/claude-swap) by realiti4 (MIT), installed separately. Claude Code, Codex, Spotify and the other apps named here belong to their owners; LiveIsland isn't affiliated with them.
 
 ## License
 
