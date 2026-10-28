@@ -25,7 +25,7 @@ enum ClaudeStatusLine {
         }
     }
 
-    private static let claudeFolder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
+    private static let claudeFolder = AgentMonitor.home.appendingPathComponent(".claude")
 
     /// The script file the status line command runs, from Claude Code's settings.
     static func script() throws -> URL {

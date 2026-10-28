@@ -373,6 +373,8 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
     public enum Switcher: String, Codable, Sendable {
         case liveIsland
         case claudeSwap
+        /// ccswap, for Codex accounts.
+        case ccswap
     }
 
     public var identity: ClaudeAccountIdentity
@@ -386,6 +388,8 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
     /// Its saved login expired: sign in to it again with /login.
     public var needsLogin: Bool
     public var claudeSwapNumber: Int?
+    /// Its number in ccswap, for Codex accounts ccswap manages.
+    public var ccswapNumber: Int?
 
     public var id: String { kind.rawValue + ":" + identity.key }
 

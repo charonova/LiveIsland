@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// liveisland:// links, e.g. from Shortcuts: open[/media|agents|activity|accounts[/claude|codex]], close,
-    /// settings[/general|island|media|agents|accounts[/console]|updates|about], update[/install], timer/<minutes>.
+    /// settings[/general|island|media|agents|accounts[/claude|codex][/accounts|automatic|console]|updates|about], update[/install], timer/<minutes>.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme == "liveisland" {
             Logger(subsystem: "com.aissam.liveisland", category: "url").notice("Open \(url.absoluteString, privacy: .public)")
@@ -60,9 +60,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     await model.updater.check()
                     if install { await model.updater.install() }
                 }
-            // settings/accounts/console scrolls to the console.
-            case "settings": model.openSettings(detail.flatMap(SettingsSection.init(rawValue:)) ?? .general,
-                                                anchor: parts.dropFirst(2).first?.lowercased())
+            // settings/accounts/codex/console picks the tool and the tab; settings/codex is
+            // what 1.7 called the Codex page.
+            case "settings":
+                let rest = parts.dropFirst(2).joined(separator: "/")
+                if detail == "codex" {
+                    model.openSettings(.accounts, anchor: "codex" + (rest.isEmpty ? "" : "/" + rest))
+                } else {
+                    model.openSettings(detail.flatMap(SettingsSection.init(rawValue:)) ?? .general, anchor: rest.isEmpty ? nil : rest)
+                }
             case "timer":
                 if let minutes = parts.dropFirst().first.flatMap(Double.init), minutes > 0 { model.startTimer(minutes: minutes) }
             default: break

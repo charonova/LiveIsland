@@ -1,19 +1,16 @@
 import Foundation
 import LiveIslandCore
-import os
-
-private let log = Logger(subsystem: "com.aissam.liveisland", category: "accounts")
-
 /// Every Claude and Codex account the user has used here: which one each tool is on, and
 /// each one's limits. Claude accounts come from claude-swap when it manages them (it switches
-/// them too), merged with what the status line reports; Codex accounts switch through
-/// LiveIsland, only when the user asks.
+/// them too), merged with what the status line reports; Codex accounts come from ccswap the
+/// same way, merged with what Codex's sessions report.
 @MainActor
 final class AccountsMonitor {
     struct Snapshot: Equatable {
         var accounts: [ClaudeAccount] = []
         var codexAccounts: [ClaudeAccount] = []
         var claudeSwapInstalled = false
+        var ccswapInstalled = false
         /// The account being switched to right now.
         var switching: String?
         /// The last switch's outcome, for a moment.
@@ -30,9 +27,9 @@ final class AccountsMonitor {
     var claudeSwap: [ClaudeSwapAccount]? {
         didSet { if claudeSwap != oldValue { refresh() } }
     }
-    /// Whether LiveIsland keeps Codex logins to switch between them.
-    var codexSwitching = false {
-        didSet { if codexSwitching != oldValue { refresh() } }
+    /// ccswap's Codex accounts, from its controller; nil when it isn't installed.
+    var ccswap: [CodexSwapAccount]? {
+        didSet { if ccswap != oldValue { refresh() } }
     }
 
     private let queue = DispatchQueue(label: "com.aissam.liveisland.accounts", qos: .utility)
@@ -64,7 +61,7 @@ final class AccountsMonitor {
     }
 
     func refresh() {
-        let input = Worker.Input(claudeSwap: claudeSwap, codexSwitching: codexSwitching, limits: latestLimits, notice: latestNotice,
+        let input = Worker.Input(claudeSwap: claudeSwap, ccswap: ccswap, limits: latestLimits, notice: latestNotice,
                                  codexLimits: latestCodexLimits)
         queue.async { [weak self, worker] in
             let accounts = worker.tick(input, now: Date())
@@ -73,50 +70,13 @@ final class AccountsMonitor {
                 var next = self.snapshot
                 (next.accounts, next.codexAccounts) = accounts
                 next.claudeSwapInstalled = self.claudeSwap != nil
+                next.ccswapInstalled = self.ccswap != nil
                 self.publish(next)
             }
         }
     }
 
-    /// Codex only: claude-swap switches Claude accounts.
-    func switchTo(_ account: ClaudeAccount) {
-        guard snapshot.switching == nil, account.kind == .codex, account.switcher == .liveIsland else { return }
-        var next = snapshot
-        next.switching = account.id
-        next.message = nil
-        publish(next)
-        let input = Worker.Input(claudeSwap: claudeSwap, codexSwitching: codexSwitching)
-        queue.async { [weak self, worker] in
-            let result: Result<String, Error>
-            do {
-                let identity = try CodexLogins.switchTo(account.identity.key)
-                result = .success("Codex now on \(identity.email)")
-            } catch {
-                log.error("Switch failed: \(error.localizedDescription, privacy: .public)")
-                result = .failure(error)
-            }
-            let accounts = worker.tick(input, now: Date())
-            DispatchQueue.main.async {
-                guard let self else { return }
-                var next = self.snapshot
-                (next.accounts, next.codexAccounts) = accounts
-                next.switching = nil
-                switch result {
-                case .success(let message): (next.message, next.messageIsError) = (message, false)
-                case .failure(let error): (next.message, next.messageIsError) = (error.localizedDescription, true)
-                }
-                self.publish(next)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-                    guard let self, self.snapshot.message == next.message else { return }
-                    var cleared = self.snapshot
-                    cleared.message = nil
-                    self.publish(cleared)
-                }
-            }
-        }
-    }
-
-    /// Shows the outcome of a claude-swap switch the same way as a Codex one.
+    /// Shows the outcome of a switch by claude-swap or ccswap, for a moment.
     func announce(_ message: String, isError: Bool) {
         var next = snapshot
         (next.message, next.messageIsError) = (message, isError)
@@ -129,7 +89,7 @@ final class AccountsMonitor {
         }
     }
 
-    /// Forgets an account: its row (and for Codex its saved login). The active account stays listed.
+    /// Forgets an account LiveIsland saw: its row. The active account stays listed.
     func forget(_ account: ClaudeAccount) {
         queue.async { [weak self, worker] in
             worker.forget(account)
@@ -148,7 +108,7 @@ final class AccountsMonitor {
 private final class Worker: @unchecked Sendable {
     struct Input {
         var claudeSwap: [ClaudeSwapAccount]?
-        var codexSwitching: Bool
+        var ccswap: [CodexSwapAccount]?
         var limits: ClaudeUsageLimits?
         var notice: ClaudeLimitNotice?
         var codexLimits: CodexLimits?
@@ -158,7 +118,6 @@ private final class Worker: @unchecked Sendable {
     private var codexBook: AccountBook
     private var codexAuthModified: Date?
     private var recordedCodexLimits: Date?
-    private var wasSavingCodex = false
     private var configModified: Date?
     private var recordedLimits: Date?
 
@@ -195,7 +154,7 @@ private final class Worker: @unchecked Sendable {
 
     func tick(_ input: Input, now: Date) -> (claude: [ClaudeAccount], codex: [ClaudeAccount]) {
         let before = book, codexBefore = codexBook
-        followCodex(saving: input.codexSwitching, now: now)
+        followCodex(now: now)
         if let limits = input.codexLimits, limits.observedAt != recordedCodexLimits,
            codexBook.record(limits.usageLimits, sessionStartedAt: started(limits.session)) {
             recordedCodexLimits = limits.observedAt
@@ -214,13 +173,12 @@ private final class Worker: @unchecked Sendable {
         if book != before { save(book, as: "claude") }
         let managed = input.claudeSwap.flatMap { $0.isEmpty ? nil : $0 }
         return (ClaudeAccounts.merge(book: book, claudeSwap: managed, switcher: managed == nil ? nil : .claudeSwap, now: now),
-                CodexAccounts.list(book: codexBook, switching: input.codexSwitching, now: now))
+                CodexAccounts.merge(book: codexBook, ccswap: input.ccswap, now: now))
     }
 
     func forget(_ account: ClaudeAccount) {
         let key = account.identity.key
         if account.kind == .codex {
-            CodexLogins.forget(key)
             codexBook.remove(key)
             save(codexBook, as: "codex")
         } else {
@@ -229,30 +187,12 @@ private final class Worker: @unchecked Sendable {
         }
     }
 
-    /// Codex writes its whole login to one file at once, so the account named in it is always
-    /// the login's own: it can be saved as soon as it changes.
-    private func followCodex(saving: Bool, now: Date) {
+    /// Notes the account Codex is logged in to, when its login file changes.
+    private func followCodex(now: Date) {
         let modified = (try? CodexLogins.authURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-        // Turning switching on saves the login already in place, too.
-        let justTurnedOn = saving && !wasSavingCodex
-        wasSavingCodex = saving
-        guard modified != codexAuthModified || justTurnedOn else { return }
-        guard let active = CodexLogins.active() else {
-            codexAuthModified = modified
-            return
-        }
-        codexBook.setActive(active.identity, at: now)
-        guard saving else {
-            codexAuthModified = modified
-            return
-        }
-        do {
-            _ = try CodexLogins.saveActive()
-            codexBook.entries[active.identity.key]?.hasSavedLogin = true
-            codexAuthModified = modified
-        } catch {
-            log.error("Couldn't save the Codex login: \(error.localizedDescription, privacy: .public)")
-        }
+        guard modified != codexAuthModified else { return }
+        codexAuthModified = modified
+        if let active = CodexLogins.active() { codexBook.setActive(active.identity, at: now) }
     }
 
     /// Reads ~/.claude.json only when it changed: it's Claude Code's, and it can be large.

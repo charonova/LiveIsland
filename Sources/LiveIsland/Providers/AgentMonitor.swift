@@ -25,8 +25,13 @@ final class AgentMonitor {
     private var stream: FSEventStreamRef?
     private var tick: Timer?
 
-    nonisolated static let claudeRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")
-    nonisolated static let codexRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions")
+    nonisolated static let claudeRoot = home.appendingPathComponent(".claude/projects")
+    nonisolated static let codexRoot = home.appendingPathComponent(".codex/sessions")
+
+    /// Where the agents keep their sessions: the home folder, or a folder of example sessions
+    /// (`LIVEISLAND_AGENT_HOME`) for tests and screenshots.
+    nonisolated static let home: URL = ProcessInfo.processInfo.environment["LIVEISLAND_AGENT_HOME"]
+        .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? FileManager.default.homeDirectoryForCurrentUser
 
     func start() {
         worker.queue.async { [worker] in

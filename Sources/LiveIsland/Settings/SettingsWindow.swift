@@ -31,6 +31,13 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The sidebar's groups, like System Settings'.
+    static let groups: [(title: String, sections: [SettingsSection])] = [
+        ("", [.general, .island, .media]),
+        ("Agents", [.agents, .accounts]),
+        ("LiveIsland", [.updates, .about]),
+    ]
+
     var tint: Color {
         switch self {
         case .general: return .gray
@@ -47,8 +54,19 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 /// Which page the settings window shows (SwiftUI's @State needs Xcode's plugins here).
 final class SettingsNavigation: ObservableObject {
     @Published var section: SettingsSection? = .general
-    /// A place on the page to scroll to ("console"), once.
+    /// A place on the page to scroll to, once.
     @Published var anchor: String?
+    /// The Accounts page's tool and tab.
+    @Published var accountsKind: AgentKind = .claude
+    @Published var accountsTab: AccountsTab = .accounts
+
+    /// "codex", "console", "codex/console", "claude/automatic"…: the tool and the tab.
+    /// Without a tool, a link means Claude Code's (as `settings/accounts/console` always has).
+    func open(accounts anchor: String?) {
+        let parts = (anchor ?? "").lowercased().split(separator: "/").map(String.init)
+        accountsKind = parts.compactMap(AgentKind.init(rawValue:)).first ?? (parts.isEmpty ? accountsKind : .claude)
+        accountsTab = parts.compactMap(AccountsTab.init(rawValue:)).first ?? .accounts
+    }
 }
 
 /// One settings window, brought forward when asked for again.
@@ -60,7 +78,7 @@ final class SettingsWindowController {
 
     func show(model: IslandModel, section: SettingsSection, anchor: String? = nil) {
         navigation.section = section
-        navigation.anchor = anchor
+        if section == .accounts { navigation.open(accounts: anchor) } else { navigation.anchor = anchor }
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 540),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -88,20 +106,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $navigation.section) {
-                ForEach(SettingsSection.allCases) { section in
-                    Label {
-                        HStack {
-                            Text(section.title)
-                            if section == .updates {
-                                Spacer()
-                                UpdateBadge(updater: model.updater)
+                ForEach(SettingsSection.groups, id: \.title) { group in
+                    Section {
+                        ForEach(group.sections) { section in
+                            Label {
+                                HStack {
+                                    Text(section.title)
+                                    Spacer()
+                                    if section == .updates { UpdateBadge(updater: model.updater) }
+                                    if section == .accounts { AutoBadge(claude: model.claudeSwap, codex: model.codexSwap) }
+                                }
+                            } icon: {
+                                IconBadge(symbol: section.symbol, tint: section.tint, size: 22)
                             }
+                            .tag(section)
+                            .padding(.vertical, 2)
                         }
-                    } icon: {
-                        IconBadge(symbol: section.symbol, tint: section.tint, size: 22)
+                    } header: {
+                        if !group.title.isEmpty { Text(group.title) }
                     }
-                    .tag(section)
-                    .padding(.vertical, 2)
                 }
             }
             .safeAreaInset(edge: .top) { SidebarHeader() }
@@ -113,7 +136,7 @@ struct SettingsView: View {
                 case .island: IslandPage()
                 case .media: MediaSettingsPage()
                 case .agents: AgentsSettingsPage()
-                case .accounts: ClaudeSwapPage()
+                case .accounts: AccountsSettingsPage()
                 case .updates: SoftwareUpdatePage(updater: model.updater)
                 case .about: AboutPage()
                 }
@@ -399,8 +422,7 @@ private struct AgentsSettingsPage: View {
                 ToggleRow(symbol: "speaker.wave.2.fill", tint: .pink, title: "Play a sound",
                           detail: "When an agent finishes, or stops to ask you something", isOn: $model.agentSounds)
             }
-            AccountsSettingsSection()
-            CodexAccountsSettingsSection()
+            AccountsShortcutSection()
             Section {
                 if ClaudeStatusLine.needsUpdate {
                     VStack(alignment: .leading, spacing: 8) {
@@ -635,75 +657,41 @@ enum TaskTime {
     }
 }
 
-/// Claude accounts: how to switch between them, and the ones LiveIsland knows.
-/// Claude accounts live on their own page now, switched by claude-swap.
-private struct AccountsSettingsSection: View {
+/// The Accounts page, one click away for each tool.
+private struct AccountsShortcutSection: View {
     @EnvironmentObject private var model: IslandModel
 
     var body: some View {
-        Section {
-            HStack(spacing: 10) {
-                IconBadge(symbol: "person.2.fill", tint: .purple, size: 26)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Claude accounts")
-                    Text("Switched by claude-swap, by hand or automatically").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Open Accounts") { model.openSettings(.accounts) }
+        Section("Accounts") {
+            row(.claude, tool: "claude-swap", count: model.claudeSwap.accounts?.count, installed: model.claudeSwap.executable != nil)
+            row(.codex, tool: "ccswap", count: model.codexSwap.accounts?.count, installed: model.codexSwap.executable != nil)
+        }
+    }
+
+    private func row(_ kind: AgentKind, tool: String, count: Int?, installed: Bool) -> some View {
+        HStack(spacing: 10) {
+            AgentAvatar(kind: kind, state: .idle, size: 26)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(kind.displayName) accounts")
+                Text(installed ? "Switched by \(tool)" + (count.map { " · \($0) account\($0 == 1 ? "" : "s")" } ?? "") : "Set up \(tool) to switch them")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-        } header: {
-            Text("Claude accounts")
+            Spacer()
+            Button("Open") { model.openSettings(.accounts, anchor: kind.rawValue) }
         }
     }
 }
 
-/// Codex accounts: whether LiveIsland keeps their logins to switch, and the ones it knows.
-private struct CodexAccountsSettingsSection: View {
-    @EnvironmentObject private var model: IslandModel
+/// "Auto" in the sidebar while a tool switches accounts automatically.
+private struct AutoBadge: View {
+    @ObservedObject var claude: ClaudeSwapController
+    @ObservedObject var codex: CodexSwapController
 
     var body: some View {
-        Section {
-            Toggle(isOn: $model.codexSwitching) {
-                HStack(spacing: 10) {
-                    AgentAvatar(kind: .codex, state: .idle, size: 26)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Switch Codex accounts with LiveIsland")
-                        Text("Only when you tap Switch, never on its own").font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .toggleStyle(.switch)
-            Text(model.codexSwitching
-                 ? "LiveIsland keeps a copy of each Codex login in its own folder, readable only by you, the same way Codex keeps its own in ~/.codex/auth.json, and puts it in place when you tap Switch."
-                 : "LiveIsland shows each Codex account you use and its limits. Switching stays with you (codex login).")
-                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            ForEach(model.codexAccounts) { account in
-                HStack(spacing: 10) {
-                    AccountAvatar(identity: account.identity, size: 28)
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
-                            Text(account.identity.email)
-                            if account.isActive { Text("In use").font(.system(size: 10, weight: .semibold)).foregroundStyle(.green) }
-                        }
-                        Text(account.identity.plan.map { "ChatGPT \($0)" } ?? "ChatGPT").font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text(account.switcher != nil ? "Login saved" : (model.codexSwitching ? "Not saved yet" : ""))
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                    if account.switcher != nil || !account.isActive {
-                        Button("Forget") { model.forgetAccount(account) }
-                    }
-                }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Add an account: run codex login and sign in to it. Don't use codex logout: it cancels the login.",
-                      systemImage: "person.badge.plus")
-                Label("New Codex sessions use the new account. Sessions already running keep theirs until you restart them (codex resume picks up where you left off).",
-                      systemImage: "clock")
-            }
-            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        } header: {
-            Text("Codex accounts")
+        if claude.autoSwitch || codex.autoSwitch {
+            Text("Auto").font(.system(size: 9.5, weight: .bold)).foregroundStyle(.green)
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(Capsule().fill(Color.green.opacity(0.15)))
         }
     }
 }

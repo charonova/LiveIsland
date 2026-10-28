@@ -19,7 +19,7 @@ struct AccountsPage: View {
                         .lineLimit(1)
                         .transition(.opacity)
                 }
-                Button { model.openSettings(model.accountsKind == .claude ? .accounts : .agents) } label: {
+                Button { model.openSettings(.accounts, anchor: model.accountsKind.rawValue) } label: {
                     Image(systemName: "slider.horizontal.3").font(.system(size: 11, weight: .semibold))
                         .frame(width: 24, height: 24).background(Circle().fill(.white.opacity(0.08))).contentShape(Circle())
                 }
@@ -39,10 +39,9 @@ struct AccountsPage: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
                         if codex {
-                            SectionHeader(kind: .codex, detail: model.codexSwitching ? "Switch with LiveIsland" : "Switching off",
-                                          on: model.codexSwitching)
+                            CodexSwapHeader(swap: model.codexSwap)
                             if state.codexAccounts.isEmpty {
-                                Text("Use Codex once and its account shows up here. Log in to more with codex login.")
+                                Text("Use Codex once and its account shows up here. Add more in Settings › Accounts › Codex.")
                                     .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).padding(.top, 8)
                             }
                             ForEach(state.codexAccounts) { account in
@@ -101,7 +100,7 @@ private struct ClaudeSwapHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             if swap.executable == nil {
-                Button { model.openSettings(.accounts) } label: {
+                Button { model.openSettings(.accounts, anchor: "claude") } label: {
                     Label("Set up claude-swap", systemImage: "arrow.left.arrow.right").font(.system(size: 10, weight: .semibold))
                         .padding(.horizontal, 8).frame(height: 20).background(Capsule().fill(Color.purple.opacity(0.3)))
                 }
@@ -120,7 +119,7 @@ private struct ClaudeSwapHeader: View {
                 }
                 .buttonStyle(PressableStyle())
                 .help(swap.autoSwitch ? "claude-swap switches before an account runs out. Tap to turn off." : "Let claude-swap switch before an account runs out")
-                Button { model.openSettings(.accounts, anchor: "console") } label: {
+                Button { model.openSettings(.accounts, anchor: "claude/console") } label: {
                     Image(systemName: "terminal").font(.system(size: 9, weight: .bold))
                         .frame(width: 20, height: 18).background(Capsule().fill(.white.opacity(0.08)))
                         .foregroundStyle(.white.opacity(0.65))
@@ -141,16 +140,52 @@ private struct ClaudeSwapHeader: View {
     }
 }
 
-private struct SectionHeader: View {
-    let kind: AgentKind
-    let detail: String
-    let on: Bool
+/// Codex accounts are switched by ccswap: whether it's there, and its automatic switching,
+/// one tap away.
+private struct CodexSwapHeader: View {
+    @EnvironmentObject private var model: IslandModel
+    @ObservedObject var swap: CodexSwapController
 
     var body: some View {
         HStack(spacing: 6) {
-            Chip(text: detail, color: on ? .orange : .gray)
+            if swap.executable == nil {
+                Button { model.openSettings(.accounts, anchor: "codex") } label: {
+                    Label("Set up ccswap", systemImage: "arrow.left.arrow.right").font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 8).frame(height: 20).background(Capsule().fill(Color.cyan.opacity(0.3)))
+                }
+                .buttonStyle(PressableStyle())
+                .help("ccswap switches your Codex accounts: install it in Settings › Accounts › Codex")
+            } else {
+                Chip(text: "ccswap", color: .cyan)
+                Button { swap.autoSwitch.toggle() } label: {
+                    HStack(spacing: 4) {
+                        Circle().fill(running ? Color.green : .white.opacity(0.3)).frame(width: 6, height: 6)
+                        Text(swap.autoSwitch ? "Auto" : "Auto off").font(.system(size: 10, weight: .semibold, design: .rounded))
+                    }
+                    .padding(.horizontal, 8).frame(height: 18)
+                    .background(Capsule().fill((swap.autoSwitch ? Color.green : .white).opacity(swap.autoSwitch ? 0.18 : 0.08)))
+                    .foregroundStyle(swap.autoSwitch ? Color.green : .white.opacity(0.6))
+                }
+                .buttonStyle(PressableStyle())
+                .help(swap.autoSwitch ? "ccswap switches Codex before an account runs out. Tap to turn off." : "Let ccswap switch Codex before an account runs out")
+                Button { model.openSettings(.accounts, anchor: "codex/console") } label: {
+                    Image(systemName: "terminal").font(.system(size: 9, weight: .bold))
+                        .frame(width: 20, height: 18).background(Capsule().fill(.white.opacity(0.08)))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .buttonStyle(PressableStyle())
+                .help("ccswap's console: every command and its output")
+                if let last = swap.lastEvent, swap.autoSwitch {
+                    Text(last.summary).font(.system(size: 9.5)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                }
+            }
             Spacer(minLength: 0)
         }
+    }
+
+    private var running: Bool {
+        if case .running = swap.auto { return true }
+        return false
     }
 }
 
@@ -196,7 +231,7 @@ private struct AccountRow: View {
             ProgressView().controlSize(.small).frame(width: 64)
         } else if account.needsLogin {
             Chip(text: "Sign in again", color: .orange)
-                .help("Log in to \(account.identity.email) once with \(account.kind == .codex ? "codex login" : "/login in Claude Code")")
+                .help(account.kind == .codex ? "Sign in to \(account.identity.email) again in Settings › Accounts › Codex" : "Log in to \(account.identity.email) once with /login in Claude Code")
         } else if account.switcher != nil {
             Button { model.switchAccount(account) } label: {
                 Text(isBest ? "Switch ★" : "Switch").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).frame(height: 26)
@@ -206,9 +241,9 @@ private struct AccountRow: View {
             .liquidGlass(in: Capsule(), tint: isBest ? Color.orange.opacity(0.35) : nil, interactive: true)
             .disabled(model.accountsState.switching != nil)
             .help(isBest ? "The account with the most room" : "Use this account in \(account.kind.displayName)")
-        } else if account.kind == .codex ? model.codexSwitching : model.accountsState.claudeSwapInstalled {
-            Text(account.kind == .codex ? "Not saved" : "Not in claude-swap").font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.4))
-                .help(account.kind == .codex ? "Log in to it once with codex login so LiveIsland can switch to it" : "Add it in Settings › Accounts")
+        } else if account.kind == .codex ? model.accountsState.ccswapInstalled : model.accountsState.claudeSwapInstalled {
+            Text(account.kind == .codex ? "Not in ccswap" : "Not in claude-swap").font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.4))
+                .help(account.kind == .codex ? "Add it in Settings › Accounts › Codex" : "Add it in Settings › Accounts")
         }
     }
 }

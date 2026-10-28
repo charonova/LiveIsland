@@ -71,6 +71,7 @@ final class IslandModel: ObservableObject {
         didSet {
             accountsMonitor.isVisible = isExpanded && tab == .accounts
             claudeSwap.isVisible = isExpanded && tab == .accounts
+            codexSwap.isVisible = isExpanded && tab == .accounts
         }
     }
     /// Claude and Codex accounts and their limits.
@@ -115,13 +116,6 @@ final class IslandModel: ObservableObject {
             levels.isEnabled = liveWaveform
         }
     }
-    /// Whether LiveIsland keeps Codex logins to switch between them. Off until turned on.
-    @Published var codexSwitching: Bool {
-        didSet {
-            save(codexSwitching, Key.codexSwitching)
-            accountsMonitor.codexSwitching = codexSwitching
-        }
-    }
     @Published var controlPlayers: Bool {
         didSet {
             save(controlPlayers, Key.players)
@@ -135,6 +129,7 @@ final class IslandModel: ObservableObject {
     let levels = AudioLevelMeter()
     let updater = Updater()
     let claudeSwap = ClaudeSwapController()
+    let codexSwap = CodexSwapController()
     private let accountsMonitor = AccountsMonitor()
     private let scripted = ScriptedPlayers()
     private let agentMonitor = AgentMonitor()
@@ -168,7 +163,6 @@ final class IslandModel: ObservableObject {
         checkForUpdates = defaults.bool(forKey: Key.updates)
         tabOrder = Ordering.restore(defaults.stringArray(forKey: Key.tabOrder) ?? [], all: IslandTab.allCases, name: \.rawValue)
         controlPlayers = defaults.bool(forKey: Key.players)
-        codexSwitching = defaults.bool(forKey: Key.codexSwitching)
     }
 
     func start() {
@@ -186,11 +180,13 @@ final class IslandModel: ObservableObject {
         updater.checksAutomatically = checkForUpdates
         updater.start()
         accountsMonitor.onUpdate = { [weak self] in self?.accountsState = $0 }
-        accountsMonitor.codexSwitching = codexSwitching
         accountsMonitor.start()
         claudeSwap.onAccounts = { [weak self] in self?.accountsMonitor.claudeSwap = $0 }
         claudeSwap.onNotableEvent = { [weak self] in self?.announce($0) }
         claudeSwap.start()
+        codexSwap.onAccounts = { [weak self] in self?.accountsMonitor.ccswap = $0 }
+        codexSwap.onNotableEvent = { [weak self] in self?.announce($0) }
+        codexSwap.start()
         if controlPlayers { scripted.start() }
         agentMonitor.start()
         systemMonitor.start()
@@ -207,6 +203,7 @@ final class IslandModel: ObservableObject {
         updater.stop()
         accountsMonitor.stop()
         claudeSwap.stop()
+        codexSwap.stop()
         scripted.stop()
         agentMonitor.stop()
         systemMonitor.stop()
@@ -369,9 +366,9 @@ final class IslandModel: ObservableObject {
 
     var bestCodexAccount: ClaudeAccount? { ClaudeAccount.best(codexAccounts, at: clock) }
 
-    /// Claude accounts switch through claude-swap, Codex ones through LiveIsland.
+    /// Claude accounts switch through claude-swap, Codex ones through ccswap.
     func switchAccount(_ account: ClaudeAccount) {
-        guard account.kind == .claude else { return accountsMonitor.switchTo(account) }
+        guard account.kind == .claude else { return switchCodex(account) }
         guard let number = account.claudeSwapNumber else { return }
         Task {
             await claudeSwap.switchTo(number)
@@ -379,6 +376,33 @@ final class IslandModel: ObservableObject {
             accountsMonitor.announce(failed ? (claudeSwap.entries.last?.output.split(whereSeparator: \.isNewline).last.map(String.init) ?? "claude-swap couldn't switch")
                                             : "Now on \(account.identity.displayName)", isError: failed)
         }
+    }
+
+    private func switchCodex(_ account: ClaudeAccount) {
+        guard let number = account.ccswapNumber else { return }
+        Task {
+            let switched = await codexSwap.switchTo(number)
+            accountsMonitor.announce(switched ? "Codex now on \(account.identity.email): restart Codex to use it"
+                                              : (codexSwap.entries.last?.output.split(whereSeparator: \.isNewline).last.map(String.init) ?? "ccswap couldn't switch"),
+                                     isError: !switched)
+        }
+    }
+
+    /// ccswap's automatic switching for Codex, in the notch, the same way.
+    private func announce(_ event: CodexSwapEvent) {
+        guard showAgents, case .swap(let inner) = event else { return }
+        switch inner {
+        case .switched(_, _, let to, false):
+            transient = .accountSwitched(to: "Codex · " + (to?.email ?? "another account"))
+        case .allExhausted, .quarantined, .error:
+            transient = .accountSwitched(to: "Codex · " + inner.summary)
+        default:
+            return
+        }
+        transientWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.transient = nil }
+        transientWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: work)
     }
 
     /// claude-swap's automatic switching, in the notch: a switch, or every account running out.
@@ -522,6 +546,7 @@ final class IslandModel: ObservableObject {
         isExpanded = true
         accountsMonitor.isVisible = tab == .accounts
         claudeSwap.isVisible = tab == .accounts
+        codexSwap.isVisible = tab == .accounts
         if timerFinished { dismissTimerAlert() }
         // Spotify and Music don't say when someone seeks inside them; check while open.
         if controlPlayers {
@@ -539,6 +564,7 @@ final class IslandModel: ObservableObject {
         isExpanded = false
         accountsMonitor.isVisible = false
         claudeSwap.isVisible = false
+        codexSwap.isVisible = false
         hoveredSession = nil
         scrubbing = nil
         selectedPlayerID = nil
@@ -666,6 +692,5 @@ final class IslandModel: ObservableObject {
         static let waveform = "liveWaveform"
         static let tabOrder = "tabOrder"
         static let updates = "checkForUpdates"
-        static let codexSwitching = "codexSwitching"
     }
 }
