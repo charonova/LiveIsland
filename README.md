@@ -17,7 +17,7 @@ A Dynamic Island for the Mac's notch. It moves **Claude Code** and **Codex** to 
 
 <img src="demo/island-accounts.png" width="760" alt="The island's Accounts tab: claude-swap with automatic switching on, three Claude accounts with their 5-hour and weekly use, and Switch ★ on the one with the most room">
 
-**[Install](#install)** · **[How switching works](#how-switching-works)** · **[Everything it does](#everything-it-does)** · **[Privacy](#privacy)**
+**[Website](https://charonova.github.io/LiveIsland/)** · **[Guide](https://charonova.github.io/LiveIsland/guide.html)** · **[Install](#install)** · **[How switching works](#how-switching-works)** · **[Everything it does](#everything-it-does)** · **[Privacy](#privacy)**
 
 </div>
 
