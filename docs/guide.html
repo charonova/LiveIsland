@@ -72,7 +72,7 @@
       </div>
       <ul>
         <li><b>Media</b>: any player, with a real waveform, the cover's glow, scrubbing, ±15 s, Up Next and Recently Played</li>
-        <li><b>Agents</b>: every Claude Code and Codex session (working, needs you, done, idle). Click one to jump to its window or Terminal tab, or copy its resume command. Rings show each tool's 5-hour and weekly limits</li>
+        <li><b>Agents</b>: every Claude Code and Codex session (working, needs you, done, idle). Click one to jump to its window or Terminal tab, or copy its resume command. Rings show each tool's limits: the week, 5 hours when the plan has that limit, and a model's own week</li>
         <li><b>Activity</b>: timers, calendar, battery, headphones, microphone and camera</li>
         <li><b>Accounts</b>: each account's use, with Switch and Auto (see below)</li>
       </ul>
@@ -82,7 +82,7 @@
       <p><b>Settings › Accounts</b> holds every account. A <b>Claude Code | Codex</b> switch picks the tool. The card under it shows the switcher, its version, the account in use, the last check and <b>Auto</b>; its <b>⋯</b> menu checks for updates and opens the switcher's GitHub page. Below the card are three tabs:</p>
       <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/settings-accounts.png" alt="Settings › Accounts on Claude Code"></div>
       <ul>
-        <li><b>Accounts</b>: a card per account with 5-hour and weekly bars and reset times. <b>Switch ★</b> marks the one with the most room. The last card adds an account</li>
+        <li><b>Accounts</b>: a card per account with a bar and reset time for each limit it has: the week, 5 hours (plans without that limit don't show it), and a model's own week such as Fable. <b>Switch ★</b> marks the one with the most room. The last card adds an account</li>
         <li><b>Automatic</b>: the switch, what the last check found, and the switcher's settings</li>
         <li><b>Console</b>: every command and switch, as text</li>
       </ul>
@@ -123,7 +123,7 @@
       <div class="shot"><img src="https://raw.githubusercontent.com/charonova/LiveIsland/main/demo/console.png" alt="The console"></div>
 
       <h2 id="limits">Claude Code's limits</h2>
-      <p>Claude Code shares its 5-hour and weekly percentages only with its status line. In <b>Settings › AI Agents</b>, click <b>Add to My Status Line</b>. LiveIsland adds three lines to your status line script, after it reads its input, and keeps a copy of the original next to it (<code>*.liveisland-backup</code>). To add them yourself, they're in <a href="https://github.com/charonova/LiveIsland/blob/main/scripts/claude-statusline-snippet.sh"><code>scripts/claude-statusline-snippet.sh</code></a>. Without them, LiveIsland still counts Claude Code's tokens from its transcripts. Codex writes its limits into its sessions, so it needs nothing.</p>
+      <p>Claude Code shares its limit percentages (the week, and 5 hours on plans that have that limit) only with its status line. In <b>Settings › AI Agents</b>, click <b>Add to My Status Line</b>. LiveIsland adds three lines to your status line script, after it reads its input, and keeps a copy of the original next to it (<code>*.liveisland-backup</code>). To add them yourself, they're in <a href="https://github.com/charonova/LiveIsland/blob/main/scripts/claude-statusline-snippet.sh"><code>scripts/claude-statusline-snippet.sh</code></a>. Without them, LiveIsland still counts Claude Code's tokens from its transcripts. Codex writes its limits into its sessions, so it needs nothing.</p>
 
       <h2 id="links">Links</h2>
       <p>Open these from Shortcuts, Raycast, Alfred or a terminal (<code>open liveisland://open</code>):</p>

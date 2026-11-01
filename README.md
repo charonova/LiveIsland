@@ -36,7 +36,7 @@ Nothing moves until you come back, sign in to another account and type "continue
 | | Without LiveIsland | With LiveIsland |
 |---|---|---|
 | **An account runs out** | The agent stops until you notice | It moves to the account with the most room *before* the limit |
-| **Several accounts** | Log out, log in, guess which one has room | Every account's 5-hour and weekly use side by side, one click to switch |
+| **Several accounts** | Log out, log in, guess which one has room | Every account's limits side by side (the week, 5 hours on plans that have it, a model's own week), one click to switch |
 | **What the tools did** | Hidden in a terminal | A console with every command, check and switch |
 | **Which agent needs you** | Check every window | The notch says so, and jumps to the right tab |
 
@@ -140,7 +140,7 @@ The island's **Accounts** tab has the same switch, with each tool's **Auto** but
 
 ### Claude Code's limits
 
-Claude Code shares its 5-hour and weekly percentages only with its status line. In **Settings › AI Agents**, click **Add to My Status Line**. LiveIsland adds three lines to your status line script, after it reads its input, and keeps a copy of the original next to it (`*.liveisland-backup`). The lines save the percentages to `~/.claude/liveisland-limits.json`, which the island reads. To add them yourself, they're in [`scripts/claude-statusline-snippet.sh`](scripts/claude-statusline-snippet.sh). Without them, the island still counts Claude Code's tokens from its transcripts.
+Claude Code shares its limit percentages (the week, and 5 hours on plans that have that limit) only with its status line. In **Settings › AI Agents**, click **Add to My Status Line**. LiveIsland adds three lines to your status line script, after it reads its input, and keeps a copy of the original next to it (`*.liveisland-backup`). The lines save the percentages to `~/.claude/liveisland-limits.json`, which the island reads. To add them yourself, they're in [`scripts/claude-statusline-snippet.sh`](scripts/claude-statusline-snippet.sh). Without them, the island still counts Claude Code's tokens from its transcripts.
 
 ## Privacy
 
