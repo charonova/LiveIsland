@@ -283,8 +283,17 @@ public struct AccountBook: Codable, Equatable, Sendable {
     /// A request Claude refused for a limit: that account is out of room until the notice's
     /// reset time. It's the only news an exhausted account ever gives, as it never answers.
     /// Placed by the same rules as the status line's reports.
+    /// Only the 5-hour and weekly limits count: a model's own weekly limit ("seven_day_opus")
+    /// leaves the other models working, and filing it as a 5-hour one would invent a 5-hour
+    /// limit for a plan that has none.
     public mutating func record(_ notice: ClaudeLimitNotice, sessionStartedAt: Date?) {
-        let window = RateLimitWindow(usedPercent: 100, windowMinutes: notice.type == "seven_day" ? 10_080 : 300, resetsAt: notice.resetsAt)
+        let minutes: Int
+        switch notice.type {
+        case "five_hour": minutes = 300
+        case "seven_day": minutes = 10_080
+        default: return
+        }
+        let window = RateLimitWindow(usedPercent: 100, windowMinutes: minutes, resetsAt: notice.resetsAt)
         let owner = entries.first { entry in
             let known = window.windowMinutes == 300 ? entry.value.fiveHour : entry.value.sevenDay
             return Self.sameReset(known?.resetsAt, notice.resetsAt)
@@ -380,8 +389,12 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
     public var identity: ClaudeAccountIdentity
     public var kind: AgentKind
     public var isActive: Bool
+    /// Nil when the account has no 5-hour limit (some plans have only the weekly ones), or
+    /// when it was never read.
     public var fiveHour: RateLimitWindow?
     public var sevenDay: RateLimitWindow?
+    /// Weekly limits of single models ("Fable"), as claude-swap reports them.
+    public var models: [RateLimitWindow] = []
     public var limitsObservedAt: Date?
     /// How to switch to it; nil when it can't be switched to from here.
     public var switcher: Switcher?
@@ -410,13 +423,18 @@ public struct ClaudeAccount: Identifiable, Equatable, Sendable {
     /// Windows that reset since they were seen count from zero again.
     public func current(at now: Date) -> ClaudeAccount {
         var account = self
-        let limits = ClaudeUsageLimits(fiveHour: fiveHour, sevenDay: sevenDay, observedAt: limitsObservedAt ?? now).current(at: now)
-        account.fiveHour = limits.fiveHour
-        account.sevenDay = limits.sevenDay
+        account.fiveHour = fiveHour?.current(at: now)
+        account.sevenDay = sevenDay?.current(at: now)
+        account.models = models.map { $0.current(at: now) }
         return account
     }
 
-    /// The fuller of the two windows: what decides whether it can take more work.
+    /// Every limit it reports, in the order to show them: the 5-hour one only when it has one,
+    /// the week, then each model's week.
+    public var windows: [RateLimitWindow] { [fiveHour, sevenDay].compactMap { $0 } + models }
+
+    /// The fuller of the two account-wide windows: what decides whether it can take more work.
+    /// Without a 5-hour limit, that's the week alone. A model's own limit stops only that model.
     public var used: Double? {
         let values = [fiveHour?.usedPercent, sevenDay?.usedPercent].compactMap { $0 }
         return values.max()
@@ -449,6 +467,7 @@ public struct ClaudeSwapAccount: Equatable, Sendable {
     public var isActive: Bool
     /// "ok", "relogin_required", "token_expired", …
     public var usageStatus: String
+    /// Nil when the account has no 5-hour limit: claude-swap leaves `fiveHour` out then.
     public var fiveHour: RateLimitWindow?
     public var sevenDay: RateLimitWindow?
     public var usageFetchedAt: Date?
@@ -462,9 +481,21 @@ public struct ClaudeSwapAccount: Equatable, Sendable {
     /// When it's expected to run out at its current pace, and whether it lasts to its reset.
     public var projectedExhaustionAt: Date? = nil
     public var willLastToReset: Bool? = nil
+    /// Weekly limits of single models (`usage.scoped`).
+    public var models: [RateLimitWindow] = []
 
     public var needsLogin: Bool { usageStatus == "relogin_required" || usageStatus == "token_expired" }
     public var name: String { alias ?? email }
+
+    /// Every limit it reports, as `ClaudeAccount.windows` orders them.
+    public var windows: [RateLimitWindow] { [fiveHour, sevenDay].compactMap { $0 } + models }
+
+    /// Whether any of these accounts has a 5-hour limit; nil while none has been read. Each
+    /// account can differ: some plans no longer have one.
+    public static func anyHasFiveHourLimit(_ accounts: [ClaudeSwapAccount]) -> Bool? {
+        if accounts.contains(where: { $0.fiveHour != nil }) { return true }
+        return accounts.contains { $0.sevenDay != nil || !$0.models.isEmpty } ? false : nil
+    }
 }
 
 /// claude-swap's JSON (schema version 1).
@@ -491,14 +522,18 @@ public enum ClaudeSwapJSON {
                 loginExpiresAt: (row["loginExpiresAt"] as? String).flatMap(Format.date(iso8601:)),
                 usageError: row["usageError"] as? String,
                 projectedExhaustionAt: ((usage?["sevenDay"] as? [String: Any])?["projectedExhaustionAt"] as? String).flatMap(Format.date(iso8601:)),
-                willLastToReset: (usage?["sevenDay"] as? [String: Any])?["willLastToReset"] as? Bool)
+                willLastToReset: (usage?["sevenDay"] as? [String: Any])?["willLastToReset"] as? Bool,
+                models: (usage?["scoped"] as? [Any] ?? []).compactMap { scoped in
+                    guard let name = (scoped as? [String: Any])?["name"] as? String, !name.isEmpty else { return nil }
+                    return window(scoped, minutes: 10_080, model: name)
+                })
         }
     }
 
-    private static func window(_ value: Any?, minutes: Int) -> RateLimitWindow? {
+    private static func window(_ value: Any?, minutes: Int, model: String? = nil) -> RateLimitWindow? {
         guard let value = value as? [String: Any], let used = value["pct"] as? Double else { return nil }
         return RateLimitWindow(usedPercent: used, windowMinutes: minutes,
-                               resetsAt: (value["resetsAt"] as? String).flatMap(Format.date(iso8601:)))
+                               resetsAt: (value["resetsAt"] as? String).flatMap(Format.date(iso8601:)), model: model)
     }
 
     /// `cswap switch … --json`: whether it switched, and what it said (or the error).
@@ -550,10 +585,13 @@ public enum ClaudeAccounts {
                                             switcher: .claudeSwap)
                 account.claudeSwapNumber = swap.number
                 account.needsLogin = swap.needsLogin
+                account.models = swap.models
                 // The status line reports the account in use as it works; claude-swap polls every few minutes.
                 if let known, swap.isActive, let observed = known.limitsObservedAt, observed > (swap.usageFetchedAt ?? .distantPast),
                    known.fiveHour != nil || known.sevenDay != nil {
-                    account.fiveHour = known.fiveHour ?? account.fiveHour
+                    // A newer report of the week without 5 hours: the plan has no 5-hour limit
+                    // (any more), so claude-swap's older 5-hour number must not linger.
+                    account.fiveHour = known.sevenDay != nil ? known.fiveHour : known.fiveHour ?? account.fiveHour
                     account.sevenDay = known.sevenDay ?? account.sevenDay
                     account.limitsObservedAt = observed
                 }

@@ -129,7 +129,11 @@ extension ClaudeSwapController: SwapTool {
             consoleHint: "list · status · config list · threshold 2 85",
             autoDetail: "Every minute, claude-swap checks each account and moves Claude Code to the one with the most room before the one in use runs out. Running sessions follow within about 30 seconds.",
             fields: [
-                .init(key: "autoswitch.threshold", title: "Switch at (5 hours)", kind: .number(unit: "%", placeholder: "90")),
+                // claude-swap's threshold is the line for every limit, unless the week has its
+                // own: with no account on a 5-hour limit, it's the week's line.
+                .init(key: "autoswitch.threshold",
+                      title: ClaudeSwapAccount.anyHasFiveHourLimit(accounts ?? []) == false ? "Switch at" : "Switch at (5 hours)",
+                      kind: .number(unit: "%", placeholder: "90")),
                 .init(key: "autoswitch.weeklyThreshold", title: "Switch at (week)", kind: .number(unit: "%", placeholder: "same")),
                 .init(key: "autoswitch.cooldownSeconds", title: "Wait between switches", kind: .number(unit: "s", placeholder: "300")),
                 .init(key: "autoswitch.strategy", title: "Pick the account with",
@@ -466,14 +470,14 @@ private struct ProviderSwitch: View {
 
 // MARK: - Accounts tab
 
-/// One account as a card: who, its two limits, and what can be done with it.
+/// One account as a card: who, its limits, and what can be done with it.
 private struct AccountCard<Menu: View>: View {
     let number: Int
     let identity: ClaudeAccountIdentity
     let subtitle: String?
     let tags: [(String, Color)]
-    let fiveHour: RateLimitWindow?
-    let week: RateLimitWindow?
+    /// The limits it reports: 5 hours only when it has that limit, the week, models' weeks.
+    let windows: [RateLimitWindow]
     let note: (text: String, isProblem: Bool)?
     let isActive: Bool
     let isBest: Bool
@@ -513,8 +517,12 @@ private struct AccountCard<Menu: View>: View {
                     .frame(width: 22)
             }
             HStack(spacing: 18) {
-                UsageBar(label: "5 hours", window: fiveHour)
-                UsageBar(label: "Week", window: week)
+                if windows.isEmpty {
+                    UsageBar(label: "Week", window: nil)
+                }
+                ForEach(windows) { window in
+                    UsageBar(label: window.shortLabel, window: window)
+                }
             }
             if let note {
                 Label(note.text, systemImage: note.isProblem ? "exclamationmark.triangle.fill" : "info.circle")
@@ -665,7 +673,7 @@ private struct ClaudeCards: View {
                 AccountCard(number: account.number,
                             identity: ClaudeAccountIdentity(accountUUID: "", email: account.email, name: account.alias),
                             subtitle: account.alias != nil ? account.email : account.organizationName,
-                            tags: tags(account), fiveHour: account.fiveHour, week: account.sevenDay, note: note(account),
+                            tags: tags(account), windows: account.windows, note: note(account),
                             isActive: account.isActive, isBest: model.bestAccount?.claudeSwapNumber == account.number,
                             busy: swap.busy != nil, tint: .purple,
                             onSwitch: { Task { await swap.switchTo(account.number) } }) {
@@ -732,7 +740,8 @@ private struct CodexCards: View {
                 AccountCard(number: account.number,
                             identity: known?.identity ?? ClaudeAccountIdentity(accountUUID: "", email: account.email),
                             subtitle: known?.identity.name != nil ? account.email : nil,
-                            tags: tags(account), fiveHour: known?.fiveHour ?? account.fiveHour, week: known?.sevenDay ?? account.weekly,
+                            tags: tags(account),
+                            windows: [known?.fiveHour ?? account.fiveHour, known?.sevenDay ?? account.weekly].compactMap { $0 },
                             note: note(account), isActive: account.isActive,
                             isBest: model.bestCodexAccount?.ccswapNumber == account.number,
                             busy: swap.busy != nil, tint: .cyan,

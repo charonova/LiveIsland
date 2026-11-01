@@ -24,19 +24,12 @@ public struct ClaudeUsageLimits: Equatable, Sendable {
 
     /// A window that has reset since it was observed starts again from zero.
     public func current(at now: Date) -> ClaudeUsageLimits {
-        func fresh(_ window: RateLimitWindow?) -> RateLimitWindow? {
-            guard var window else { return nil }
-            if let resets = window.resetsAt, resets <= now {
-                window.usedPercent = 0
-                window.resetsAt = nil
-            }
-            return window
-        }
-        return ClaudeUsageLimits(fiveHour: fresh(fiveHour), sevenDay: fresh(sevenDay), observedAt: observedAt, session: session)
+        ClaudeUsageLimits(fiveHour: fiveHour?.current(at: now), sevenDay: sevenDay?.current(at: now), observedAt: observedAt, session: session)
     }
 
     /// Reads either the status line's whole input or `{"observed_at": …, "rate_limits": …}`.
-    /// `modified` stands in for `observed_at` when the file doesn't say.
+    /// `modified` stands in for `observed_at` when the file doesn't say. Plans without a
+    /// 5-hour limit send only `seven_day`: then `fiveHour` stays nil.
     public static func parse(_ data: Data, modified: Date) -> ClaudeUsageLimits? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let limits = object["rate_limits"] as? [String: Any]

@@ -82,7 +82,7 @@ LiveIsland doesn't switch accounts itself. It runs two open-source tools that do
 
 **Settings › Accounts** has a **Claude Code | Codex** switch. The card at the top shows the tool, its version, the account in use, the last check and **Auto**; its **⋯** menu checks for updates. Below it, three tabs:
 
-- **Accounts**: one card per account with its 5-hour and weekly bars and reset times. **Switch ★** marks the one with the most room. A Claude account's menu keeps it out of rotation, renames it, gives it its own switch point, moves it or removes it. A Codex account's menu redeems a banked reset or removes it. The last card adds an account.
+- **Accounts**: one card per account with a bar and reset time for each limit it has: 5 hours (plans without that limit don't show it), the week, and a model's own week (such as Fable). **Switch ★** marks the one with the most room. A Claude account's menu keeps it out of rotation, renames it, gives it its own switch point, moves it or removes it. A Codex account's menu redeems a banked reset or removes it. The last card adds an account.
 - **Automatic**: the switch, what the last check found, and the tool's own settings. These are each tool's own settings, so changing one here is the same as `cswap config set`. claude-swap has a switch point for the 5-hour and the weekly limit, a wait between switches, and a choice between the most room or the soonest weekly reset. ccswap has its switch point, how often it checks, and the wait.
 - **Console**: every command LiveIsland ran, with its output and exit code, and every switch, refusal and restart as it happens. Type any other command below it; it runs directly, never through a shell.
 
@@ -115,7 +115,7 @@ The island's **Accounts** tab has the same switch, with each tool's **Auto** but
 **Agents**
 - Every Claude Code and Codex session: working (with a timer), needs you, done, idle
 - Jump to a session in the app it runs in: VS Code, Cursor, Windsurf or Antigravity (the right window), Terminal or iTerm2 (the exact tab), or copy its resume command
-- Claude Code's and Codex's 5-hour and weekly limits as rings, plus tokens this window and today
+- Claude Code's and Codex's limits as rings (5 hours when the account has that limit, the week, each model's week), plus tokens this window and today
 - An optional sound when an agent finishes or asks you something
 
 **Now playing**

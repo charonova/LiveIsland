@@ -100,16 +100,22 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
 }
 
 /// One rate-limit window as Codex reports it.
-public struct RateLimitWindow: Codable, Equatable, Sendable {
+public struct RateLimitWindow: Codable, Equatable, Identifiable, Sendable {
     public var usedPercent: Double
     public var windowMinutes: Int
     public var resetsAt: Date?
+    /// The model a limit of its own applies to ("Fable"), beside the limit for all models.
+    public var model: String?
 
-    public init(usedPercent: Double, windowMinutes: Int, resetsAt: Date?) {
+    public init(usedPercent: Double, windowMinutes: Int, resetsAt: Date?, model: String? = nil) {
         self.usedPercent = usedPercent
         self.windowMinutes = windowMinutes
         self.resetsAt = resetsAt
+        self.model = model
     }
+
+    /// A model's week and the week for all models last as long, so the model tells them apart.
+    public var id: String { model.map { "\(windowMinutes):\($0)" } ?? String(windowMinutes) }
 
     /// "5-hour" or "Weekly".
     public var label: String {
@@ -119,6 +125,25 @@ public struct RateLimitWindow: Codable, Equatable, Sendable {
         case let minutes where minutes % 60 == 0: return "\(minutes / 60)-hour"
         default: return "\(windowMinutes)-minute"
         }
+    }
+
+    /// What a meter calls it: "5 hours", "Week", "Fable week".
+    public var shortLabel: String {
+        if let model { return windowMinutes == 10_080 ? "\(model) week" : "\(model) \(label.lowercased())" }
+        switch windowMinutes {
+        case 300: return "5 hours"
+        case 10_080: return "Week"
+        default: return label
+        }
+    }
+
+    /// A window that has reset since it was observed starts again from zero.
+    public func current(at now: Date) -> RateLimitWindow {
+        guard let resets = resetsAt, resets <= now else { return self }
+        var window = self
+        window.usedPercent = 0
+        window.resetsAt = nil
+        return window
     }
 }
 
@@ -160,10 +185,13 @@ public struct ClaudeLimitNotice: Equatable, Sendable {
 
     public var isLimitReached: Bool { status == "rejected" }
 
+    /// "5-hour", "Weekly", or a model's own week ("seven_day_opus": "Opus weekly").
     public var windowLabel: String {
         switch type {
         case "five_hour": return "5-hour"
         case "seven_day": return "Weekly"
+        case let other where other.hasPrefix("seven_day_"):
+            return other.dropFirst("seven_day_".count).replacingOccurrences(of: "_", with: " ").capitalized + " weekly"
         case let other: return other.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }

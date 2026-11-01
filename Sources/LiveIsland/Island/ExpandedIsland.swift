@@ -898,13 +898,14 @@ private struct ClaudeUsage: View {
 
     /// The limits of the account in use. Once LiveIsland knows several accounts, only numbers
     /// filed under the active one count: right after a switch the status line still shows the
-    /// previous account's until Claude answers on the new one.
+    /// previous account's until Claude answers on the new one. 5 hours only when the account
+    /// has that limit; models' own weeks come from claude-swap.
     private var activeWindows: [RateLimitWindow]? {
         if model.accounts.count > 1 {
-            let windows = [model.accountsState.active?.fiveHour, model.accountsState.active?.sevenDay].compactMap { $0 }
+            let windows = model.accountsState.active?.windows ?? []
             return windows.isEmpty ? nil : windows
         }
-        return model.agents.claudeLimits?.windows
+        return model.agents.claudeLimits.map { $0.windows + (model.accountsState.active?.models ?? []) }
     }
 
     /// Which account, when there's more than one; else today's tokens.
@@ -920,11 +921,7 @@ private struct ClaudeUsage: View {
         VStack(alignment: .leading, spacing: 8) {
             ProviderTitle(kind: .claude, detail: detail(usage))
             if let windows = activeWindows {
-                HStack(spacing: 0) {
-                    ForEach(windows, id: \.windowMinutes) { window in
-                        RingGauge(window: window, tint: AgentGlyph(kind: .claude).color).frame(maxWidth: .infinity)
-                    }
-                }
+                RingGauges(windows: windows, tint: AgentGlyph(kind: .claude).color)
             } else if let limit = model.agents.claudeLimit {
                 HStack(spacing: 10) {
                     Ring(fraction: 1, color: .red, size: 40) { Image(systemName: "hand.raised.fill").font(.system(size: 13)).foregroundStyle(.red) }
@@ -965,7 +962,7 @@ private struct CodexUsage: View {
     /// With several Codex accounts, only numbers filed under the one in use.
     private var activeWindows: [RateLimitWindow]? {
         if model.codexAccounts.count > 1 {
-            let windows = [model.accountsState.activeCodex?.fiveHour, model.accountsState.activeCodex?.sevenDay].compactMap { $0 }
+            let windows = model.accountsState.activeCodex?.windows ?? []
             return windows.isEmpty ? nil : windows
         }
         guard let windows = model.agents.codexLimits?.windows, !windows.isEmpty else { return nil }
@@ -977,13 +974,29 @@ private struct CodexUsage: View {
             ProviderTitle(kind: .codex, detail: model.codexAccounts.count > 1
                           ? model.accountsState.activeCodex?.identity.email.components(separatedBy: "@").first : nil)
             if let windows = activeWindows {
-                HStack(spacing: 0) {
-                    ForEach(windows, id: \.windowMinutes) { window in
-                        RingGauge(window: window, tint: AgentGlyph(kind: .codex).color).frame(maxWidth: .infinity)
-                    }
-                }
+                RingGauges(windows: windows, tint: AgentGlyph(kind: .codex).color)
             } else {
                 Text("No recent sessions").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+            }
+        }
+    }
+}
+
+/// Two rings to a row: the panel is too narrow for a third (5 hours, the week and a model's week).
+private struct RingGauges: View {
+    let windows: [RateLimitWindow]
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(stride(from: 0, to: windows.count, by: 2)), id: \.self) { start in
+                HStack(spacing: 0) {
+                    ForEach(windows[start..<min(start + 2, windows.count)]) { window in
+                        RingGauge(window: window, tint: tint).frame(maxWidth: .infinity)
+                    }
+                    // A lone ring keeps its column instead of taking the row's middle.
+                    if windows.count - start == 1, windows.count > 1 { Color.clear.frame(maxWidth: .infinity, maxHeight: 0) }
+                }
             }
         }
     }
@@ -1003,7 +1016,8 @@ private struct RingGauge: View {
                 }
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(window.windowMinutes == 300 ? "5 hours" : window.label).font(.system(size: 10, weight: .semibold))
+                Text(window.model == nil && window.windowMinutes != 300 ? window.label : window.shortLabel)
+                    .font(.system(size: 10, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                 Text(window.resetsAt.map { Format.until($0) } ?? "Fresh").font(.system(size: 9)).foregroundStyle(.white.opacity(0.45))
                     .lineLimit(1)
             }

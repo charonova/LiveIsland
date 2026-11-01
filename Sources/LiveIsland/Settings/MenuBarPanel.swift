@@ -247,8 +247,10 @@ private struct AccountStrip: View {
         account.used.map { "\(Int($0.rounded()))% used" } ?? "not seen yet"
     }
 
+    /// Only the limits the account reports: no "5 hours" for a plan without that limit.
     private func limits(_ account: ClaudeAccount) -> String {
-        func percent(_ window: RateLimitWindow?) -> String { window.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—" }
-        return "5 hours \(percent(account.fiveHour)) · Week \(percent(account.sevenDay))"
+        let windows = account.windows
+        guard !windows.isEmpty else { return "Limits not seen yet" }
+        return windows.map { "\($0.shortLabel) \(Int($0.usedPercent.rounded()))%" }.joined(separator: " · ")
     }
 }

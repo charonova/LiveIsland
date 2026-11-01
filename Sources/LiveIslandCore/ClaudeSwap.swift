@@ -8,8 +8,10 @@ public enum ClaudeSwapEvent: Equatable, Sendable {
         public var email: String?
     }
 
-    /// A check of every account: the one in use and each account's 5-hour and weekly use.
-    case poll(active: Account?, windows: [Int: (fiveHour: Double?, week: Double?)], threshold: Double?)
+    /// A check of every account: the one in use and each account's 5-hour and weekly use, and
+    /// the weekly use of the models claude-swap watches (`autoswitch.model`). `fiveHour` is
+    /// nil for an account without a 5-hour limit.
+    case poll(active: Account?, windows: [Int: (fiveHour: Double?, week: Double?, models: [String: Double])], threshold: Double?)
     /// It switched (`trigger`: "proactive", "at-limit", "failover", "consume-first").
     case switched(trigger: String, from: Account?, to: Account?, dryRun: Bool)
     case noSwitch(reason: String, detail: String)
@@ -39,10 +41,12 @@ public enum ClaudeSwapEvent: Equatable, Sendable {
         let event: ClaudeSwapEvent
         switch kind {
         case "poll":
-            var windows: [Int: (Double?, Double?)] = [:]
+            var windows: [Int: (Double?, Double?, [String: Double])] = [:]
             for (key, value) in object["windowsPct"] as? [String: Any] ?? [:] {
                 guard let number = Int(key), let window = value as? [String: Any] else { continue }
-                windows[number] = (window["5h"] as? Double, window["7d"] as? Double)
+                // Any other label is a model's own week ("Fable").
+                let models = window.filter { $0.key != "5h" && $0.key != "7d" }.compactMapValues { $0 as? Double }
+                windows[number] = (window["5h"] as? Double, window["7d"] as? Double, models)
             }
             event = .poll(active: account(object["active"]), windows: windows, threshold: object["threshold"] as? Double)
         case "switch":
@@ -97,9 +101,12 @@ public enum ClaudeSwapEvent: Equatable, Sendable {
         case .poll(let active, let windows, let threshold):
             let parts = windows.keys.sorted().map { number -> String in
                 let window = windows[number]!
-                let five = window.fiveHour.map { "\(Int($0.rounded()))%" } ?? "–"
-                let week = window.week.map { "\(Int($0.rounded()))%" } ?? "–"
-                return "#\(number) \(five)/\(week)"
+                func percent(_ value: Double?) -> String { value.map { "\(Int($0.rounded()))%" } ?? "–" }
+                // An account without a 5-hour limit shows only its week, not a dash for 5 hours.
+                var text = window.fiveHour == nil && window.week != nil
+                    ? "#\(number) week \(percent(window.week))" : "#\(number) \(percent(window.fiveHour))/\(percent(window.week))"
+                for model in window.models.keys.sorted() { text += " \(model) \(percent(window.models[model]))" }
+                return text
             }
             let line = threshold.map { " · switch at \(Int($0))%" } ?? ""
             return "Checked: on \(name(active)) · \(parts.joined(separator: ", "))\(line)"

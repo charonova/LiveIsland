@@ -448,7 +448,7 @@ private struct AgentsSettingsPage: View {
                         .foregroundStyle(.green)
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Claude Code shares its 5-hour and weekly percentages only with its status line. LiveIsland can add three lines to your status line script that pass them on; your script keeps working as before, and a copy of it is saved first.")
+                        Text("Claude Code shares its usage limits, in percent, only with its status line. LiveIsland can add three lines to your status line script that pass them on; your script keeps working as before, and a copy of it is saved first.")
                             .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 10) {
                             Button("Add to My Status Line") { model.installStatusLine() }.glassButton(prominent: true)

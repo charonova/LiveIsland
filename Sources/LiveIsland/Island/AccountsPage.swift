@@ -1,8 +1,9 @@
 import LiveIslandCore
 import SwiftUI
 
-/// Every Claude and Codex account used on this Mac, with its 5-hour and weekly limits, and a
-/// Switch button when switching is set up.
+/// Every Claude and Codex account used on this Mac, with the limits it reports (5 hours only
+/// when it has that limit, the week, each model's week), and a Switch button when switching
+/// is set up.
 struct AccountsPage: View {
     @EnvironmentObject private var model: IslandModel
 
@@ -208,8 +209,16 @@ private struct AccountRow: View {
                 Text(account.identity.email).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
             }
             .frame(width: 168, alignment: .leading)
-            LimitMeter(label: "5 hours", window: account.fiveHour)
-            LimitMeter(label: "Week", window: account.sevenDay)
+            let windows = account.windows
+            if windows.isEmpty {
+                LimitMeter(label: "Week", window: nil)
+            } else {
+                // Room for two meters as they are; more (models' weeks too) share it.
+                let width = min(108, (300 - 10 * CGFloat(windows.count - 1)) / CGFloat(windows.count))
+                ForEach(windows) { window in
+                    LimitMeter(label: window.shortLabel, window: window, width: width)
+                }
+            }
             Spacer(minLength: 4)
             action
         }
